@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch cancels the first. CI minutes spent finishing
+# a run whose result nobody will read are wasted.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Reproducibility: `npm ci` installs exactly the lockfile, and every dependency
+  # in this repo is pinned exact (save-exact=true), so a transitive bump cannot
+  # change what CI tested.
+  NPM_CONFIG_FUND: 'false'
+  NPM_CONFIG_AUDIT: 'false'
+
+jobs:
+  verify:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # The same major and the same flavour the benchmarks use. A CI service
+        # container running a different major would make a green CI compatible
+        # with a broken production.
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: daftar
+          POSTGRES_PASSWORD: daftar
+          POSTGRES_DB: daftar
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+        ports:
+          - 5432:5432
+        # GitHub's health check gates job start on this, so the first test does
+        # not race the server's own startup.
+        options: >-
+          --health-cmd "pg_isready -U daftar -d daftar"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+          --health-start-period 5s
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          # Reads .node-version, so the pin lives in exactly one place.
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Workspace packages have to be compiled before anything imports them at
+      # runtime: Node refuses to strip types under node_modules, and npm
+      # workspaces symlink there. Tests alias to source, but `openapi:dump` runs
+      # the real server code.
+      - name: Build workspace packages
+        run: npm run build --workspace @daftar/money
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Migrate
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgres://daftar:daftar@127.0.0.1:5432/daftar
+
+      - name: Test
+        run: npm test
+        env:
+          # The test harness clones a template database per test file, so it also
+          # needs CREATE DATABASE on this server. The service container's user is
+          # the cluster superuser, which covers it.
+          TEST_DATABASE_URL: postgres://daftar:daftar@127.0.0.1:5432/daftar
+
+      # The OpenAPI document and the Postman collection are generated artefacts
+      # that are committed. Regenerating and diffing is what stops them going
+      # stale: a route added without re-running the generators fails here rather
+      # than being discovered by whoever downloads the collection.
+      - name: Regenerate the API contract
+        run: |
+          npm run openapi:dump
+          npm run postman:build
+        env:
+          DATABASE_URL: postgres://daftar:daftar@127.0.0.1:5432/daftar
+
+      - name: Fail if the committed contract is stale
+        run: |
+          if ! git diff --quiet -- apps/api/openapi.json postman/; then
+            echo "::error::openapi.json or the Postman collection is out of date."
+            echo "Run: npm run openapi:dump && npm run postman:build"
+            git --no-pager diff --stat -- apps/api/openapi.json postman/
+            exit 1
+          fi

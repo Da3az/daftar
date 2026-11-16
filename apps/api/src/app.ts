@@ -11,8 +11,8 @@ import {
   isResponseSerializationError,
 } from '@fastify/type-provider-zod';
 import type { ZodTypeProvider } from '@fastify/type-provider-zod';
+import type { FastifyBaseLogger } from 'fastify';
 import type pg from 'pg';
-import type { Logger } from 'pino';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 
 import { env } from './env.ts';
@@ -53,17 +53,26 @@ export interface BuildAppOptions {
   /**
    * Override the logger. Tests pass a silent or capturing pino instance.
    *
-   * Typed as a required-or-absent `Logger` rather than `Logger | false`: a
-   * `loggerInstance` that can be `undefined` widens the options object enough
-   * that TypeScript picks Fastify's *http2-secure* overload, and `buildApp`
-   * then returns an instance typed against `Http2SecureServer`. Keeping the
-   * property's type narrow keeps the plain-HTTP overload selected.
+   * Typed `FastifyBaseLogger`, not pino's `Logger`: that is the interface
+   * Fastify actually consumes, and pino's own `Logger` carries custom-level
+   * generics that do not unify with it under `exactOptionalPropertyTypes`.
+   *
+   * Also note it is `?: FastifyBaseLogger` and not `: FastifyBaseLogger | false`.
+   * A `loggerInstance` whose type includes `undefined` widens the options object
+   * enough that TypeScript selects Fastify's *http2-secure* overload, and
+   * `buildApp` then returns an instance typed against `Http2SecureServer`.
    */
-  loggerOverride?: Logger;
+  loggerOverride?: FastifyBaseLogger;
 }
 
 /** The concrete instance type, with the Zod type provider attached. */
-export type App = FastifyInstance<Server, IncomingMessage, ServerResponse, Logger, ZodTypeProvider>;
+export type App = FastifyInstance<
+  Server,
+  IncomingMessage,
+  ServerResponse,
+  FastifyBaseLogger,
+  ZodTypeProvider
+>;
 
 export async function buildApp(options: BuildAppOptions): Promise<App> {
   const app = Fastify({

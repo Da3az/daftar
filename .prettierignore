@@ -14,3 +14,6 @@ package-lock.json
 
 # No parser for a dotenv file.
 .env.example
+
+# Private working notes, gitignored. Not repo source.
+claude-plans/
