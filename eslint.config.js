@@ -1,0 +1,84 @@
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      'apps/api/drizzle/**',
+      'apps/web/src/routeTree.gen.ts',
+      'infra/**/.terraform/**',
+    ],
+  },
+
+  js.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      // CONVENTIONS.md: one canonical log line per request, emitted by pino.
+      // Nothing else writes to stdout from the server.
+      'no-console': 'error',
+
+      // Money is bigint. An implicit Number() coercion on an amount is the bug
+      // this repo is about, so the compiler is not allowed to be relaxed here.
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/require-await': 'error',
+
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      ],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  // Scripts, load harness and config files are allowed to print: they are CLIs,
+  // not request handlers.
+  {
+    files: ['scripts/**/*.{js,mjs,ts}', 'load/**/*.js', '**/*.config.{js,ts,mjs}'],
+    rules: { 'no-console': 'off' },
+  },
+
+  {
+    files: ['**/*.js', '**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+  },
+
+  {
+    files: ['load/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.es2024, __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' },
+    },
+  },
+
+  {
+    files: ['apps/api/**/*.ts', 'packages/**/*.ts', 'scripts/**/*.{js,mjs,ts}'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser } },
+  },
+);

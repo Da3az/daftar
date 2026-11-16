@@ -1,0 +1,38 @@
+{
+  "name": "daftar",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=26.13.1"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:generate": "npm run -w @daftar/api db:generate",
+    "db:migrate": "npm run -w @daftar/api db:migrate",
+    "dev:api": "npm run -w @daftar/api dev",
+    "dev:web": "npm run -w @daftar/web dev",
+    "build": "npm run --workspaces --if-present build",
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run --workspaces --if-present test",
+    "openapi:dump": "npm run -w @daftar/api openapi:dump",
+    "postman:build": "node scripts/build-postman.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.6",
+    "eslint": "10.15.0",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2"
+  }
+}

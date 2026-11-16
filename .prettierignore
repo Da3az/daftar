@@ -1,0 +1,13 @@
+# The build specification is an input document, not repo source. It is never
+# reformatted.
+BUILD-PROMPT.md
+
+node_modules/
+dist/
+coverage/
+apps/api/drizzle/
+apps/web/src/routeTree.gen.ts
+apps/api/openapi.json
+postman/
+docs/evidence/raw/
+package-lock.json

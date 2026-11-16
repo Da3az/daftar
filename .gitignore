@@ -1,0 +1,27 @@
+# Local build specification — an input document, not part of the project.
+BUILD-PROMPT.md
+
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+# k6 / load artefacts that are regenerated, not evidence
+load/out/
+*.log
+
+# terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfplan
+infra/**/.terraform.lock.hcl.bak
+
+# generated route tree is committed on purpose (TanStack Router) — do not ignore it
+
+.DS_Store
