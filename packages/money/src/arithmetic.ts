@@ -1,4 +1,4 @@
-import { QUANTITY_SCALE, type CashMinor, type PriceMinor, type Quantity } from './scale.js';
+import { QUANTITY_SCALE, type CashMinor, type PriceMinor, type Quantity } from './scale.ts';
 
 export const add = (a: bigint, b: bigint): bigint => a + b;
 export const sub = (a: bigint, b: bigint): bigint => a - b;

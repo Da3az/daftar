@@ -9,6 +9,19 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
 
+    // Node 26 runs TypeScript directly by stripping types, but its resolver does
+    // NOT rewrite a `./x.js` specifier to `./x.ts` — verified: that throws
+    // ERR_MODULE_NOT_FOUND. So source imports carry the real `.ts` extension and
+    // tsc rewrites them to `.js` on emit. One source form that both `node src/...`
+    // in dev and the built output agree on, and no transpiler dependency.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
+    // Native type stripping cannot erase enums, namespaces or parameter
+    // properties. This makes using one a compile error instead of a runtime
+    // surprise in dev.
+    "erasableSyntaxOnly": true,
+
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,

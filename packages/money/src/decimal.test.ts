@@ -7,8 +7,8 @@ import {
   parseCash,
   parseQuantity,
   parseScaled,
-} from './decimal.js';
-import { CASH_SCALE, QUANTITY_SCALE } from './scale.js';
+} from './decimal.ts';
+import { CASH_SCALE, QUANTITY_SCALE } from './scale.ts';
 
 describe('parseScaled', () => {
   it('returns a bigint, not a number', () => {

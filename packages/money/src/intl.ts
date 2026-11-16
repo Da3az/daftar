@@ -1,5 +1,5 @@
-import { CASH_SCALE } from './scale.js';
-import { formatScaled } from './decimal.js';
+import { CASH_SCALE } from './scale.ts';
+import { formatScaled } from './decimal.ts';
 
 /**
  * Locales are an explicit, pinned allowlist — never a bare language tag and never

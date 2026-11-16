@@ -53,6 +53,15 @@ export default tseslint.config(
     },
   },
 
+  // Fastify's plugin contract (`FastifyPluginAsync`, and `fastify-plugin`'s
+  // non-callback form) requires the function to be `async`, whether or not it
+  // awaits anything. The registration itself is awaited by the caller, so
+  // require-await here flags the framework's shape, not a mistake.
+  {
+    files: ['apps/api/src/plugins/**/*.ts', 'apps/api/src/routes/**/*.ts'],
+    rules: { '@typescript-eslint/require-await': 'off' },
+  },
+
   // Scripts, load harness and config files are allowed to print: they are CLIs,
   // not request handlers.
   {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { abs, add, cmp, divRound, neg, notional, sub, sum } from './arithmetic.js';
-import { parseCash, parseQuantity, formatCash } from './decimal.js';
+import { abs, add, cmp, divRound, neg, notional, sub, sum } from './arithmetic.ts';
+import { parseCash, parseQuantity, formatCash } from './decimal.ts';
 
 describe('divRound', () => {
   it('rounds halves away from zero, symmetrically', () => {

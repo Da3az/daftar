@@ -16,8 +16,12 @@ services:
       POSTGRES_USER: daftar
       POSTGRES_PASSWORD: daftar
       POSTGRES_DB: daftar
-      # Deterministic collation so ORDER BY on text is stable across machines.
-      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=und-x-icu --encoding=UTF8'
+      # C collation: byte ordering, deterministic, and independent of the ICU
+      # version the image happens to ship. A benchmark whose text ordering can
+      # change under it on a base-image bump is not reproducible. Nothing in the
+      # ledger orders by text — entries order by (created_at, id) — so there is
+      # no linguistic-collation requirement to trade away.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     ports:
       # Bound to loopback only. Never publish a database on 0.0.0.0.
       - '127.0.0.1:55432:5432'
@@ -52,7 +56,14 @@ services:
       retries: 30
       start_period: 5s
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # PostgreSQL 18's official image changed this. The mount belongs at
+      # /var/lib/postgresql, NOT /var/lib/postgresql/data: from 18 the image
+      # stores data in a major-version-specific subdirectory so that
+      # `pg_upgrade --link` can see both versions without crossing a mount
+      # boundary. Mounting the old path makes the container refuse to start with
+      # "there appears to be PostgreSQL data in /var/lib/postgresql/data
+      # (unused mount/volume)".
+      - db-data:/var/lib/postgresql
 
 volumes:
   db-data:

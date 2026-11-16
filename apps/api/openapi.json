@@ -1,0 +1,223 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Daftar API",
+    "version": "0.1.0",
+    "description": "A crypto brokerage backed by a double-entry ledger whose invariants are\nenforced by PostgreSQL rather than by application code.\n\n**Demo only. No real funds, no real custody, no real market access.**\n\n### Amounts\n\nEvery monetary amount is an integer in **minor units** (cents for cash,\n1e-8 units for asset quantities) and crosses the wire as an exact decimal\nstring — never a JSON number. JSON numbers are IEEE-754 doubles, so an\namount above 2^53 minor units would be silently rounded in transit.\nParse these with a decimal or bigint type, not `parseFloat`.\n\n### Prices\n\nPrices shown in the UI are live for display. The ledger is denominated in\nfrozen integer minor units captured at order time, and the order path\nmakes no external calls.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "components": {
+    "schemas": {}
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "summary": "Liveness — the process is up. Touches nothing external.",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "uptimeSeconds": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "uptimeSeconds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness — the database answers and int8 arrives as a bigint.",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "boolean"
+                        },
+                        "bigintTypeParser": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "database",
+                        "bigintTypeParser"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "int8Probe": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            },
+                            "runtimeType": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "runtimeType"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "checks",
+                    "int8Probe"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "boolean"
+                        },
+                        "bigintTypeParser": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "database",
+                        "bigintTypeParser"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "int8Probe": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            },
+                            "runtimeType": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "runtimeType"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "checks",
+                    "int8Probe"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "this server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness and readiness"
+    },
+    {
+      "name": "accounts",
+      "description": "Accounts and balances"
+    },
+    {
+      "name": "orders",
+      "description": "Order placement — the measured write path"
+    },
+    {
+      "name": "ledger",
+      "description": "Entries, transactions and statements"
+    },
+    {
+      "name": "webhooks",
+      "description": "Inbound provider events"
+    },
+    {
+      "name": "chaos",
+      "description": "Server-side concurrency bursts for the demo"
+    }
+  ]
+}

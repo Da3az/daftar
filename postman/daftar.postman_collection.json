@@ -1,0 +1,294 @@
+{
+  "item": [
+    {
+      "id": "7667ed96-6f6f-4682-be2a-2e2a7d233130",
+      "name": "health",
+      "description": {
+        "content": "Liveness and readiness",
+        "type": "text/plain"
+      },
+      "item": [
+        {
+          "id": "3976ffe7-98f8-4e06-8573-0487529e1e8a",
+          "name": "Liveness — the process is up. Touches nothing external.",
+          "request": {
+            "name": "Liveness — the process is up. Touches nothing external.",
+            "description": {},
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "313311ad-534c-4196-afb3-33a0c1a213bc",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "health",
+                    "live"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 7081.312876173832\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "99a3dd9b-56de-47f8-8ac5-cffedf85a991",
+          "name": "Readiness — the database answers and int8 arrives as a bigint.",
+          "request": {
+            "name": "Readiness — the database answers and int8 arrives as a bigint.",
+            "description": {},
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "00df23e7-c193-4607-82bf-573e2a4ca494",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "health",
+                    "ready"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "51189a87-c0da-4a63-b8ab-e4f6ec4dcef5",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "health",
+                    "ready"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Service Unavailable",
+              "code": 503,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
+      "event": []
+    },
+    {
+      "id": "c51eac3e-d604-4fd1-b06d-299cd158a5cb",
+      "name": "accounts",
+      "description": {
+        "content": "Accounts and balances",
+        "type": "text/plain"
+      },
+      "item": [],
+      "event": []
+    },
+    {
+      "id": "6768ac6d-e5ca-4449-bb3a-7b6a226951cf",
+      "name": "orders",
+      "description": {
+        "content": "Order placement — the measured write path",
+        "type": "text/plain"
+      },
+      "item": [],
+      "event": []
+    },
+    {
+      "id": "4f37bba2-6f11-41ed-8048-2dedcc3c5e46",
+      "name": "ledger",
+      "description": {
+        "content": "Entries, transactions and statements",
+        "type": "text/plain"
+      },
+      "item": [],
+      "event": []
+    },
+    {
+      "id": "1d81ea99-1105-4657-9719-6374c3d84756",
+      "name": "webhooks",
+      "description": {
+        "content": "Inbound provider events",
+        "type": "text/plain"
+      },
+      "item": [],
+      "event": []
+    },
+    {
+      "id": "0a2b6f6b-8ff1-40c0-8b9b-98d081a33bfe",
+      "name": "chaos",
+      "description": {
+        "content": "Server-side concurrency bursts for the demo",
+        "type": "text/plain"
+      },
+      "item": [],
+      "event": []
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000",
+      "type": "string"
+    }
+  ],
+  "info": {
+    "_postman_id": "8e6e40a1-e66a-47d4-b22c-832cd1ce64d4",
+    "name": "Daftar API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": {
+      "content": "A crypto brokerage backed by a double-entry ledger whose invariants are\nenforced by PostgreSQL rather than by application code.\n\n**Demo only. No real funds, no real custody, no real market access.**\n\n### Amounts\n\nEvery monetary amount is an integer in **minor units** (cents for cash,\n1e-8 units for asset quantities) and crosses the wire as an exact decimal\nstring — never a JSON number. JSON numbers are IEEE-754 doubles, so an\namount above 2^53 minor units would be silently rounded in transit.\nParse these with a decimal or bigint type, not `parseFloat`.\n\n### Prices\n\nPrices shown in the UI are live for display. The ledger is denominated in\nfrozen integer minor units captured at order time, and the order path\nmakes no external calls.",
+      "type": "text/plain"
+    }
+  }
+}

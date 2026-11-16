@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES, formatCashLocalised, formatCashParts } from './intl.js';
-import { formatCash, parseCash } from './decimal.js';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, formatCashLocalised, formatCashParts } from './intl.ts';
+import { formatCash, parseCash } from './decimal.ts';
 
 describe('pinned numbering system', () => {
   it('every supported locale resolves to latn digits', () => {

@@ -6,7 +6,7 @@ export {
   type CashMinor,
   type Quantity,
   type PriceMinor,
-} from './scale.js';
+} from './scale.ts';
 
 export {
   parseScaled,
@@ -16,9 +16,9 @@ export {
   parseQuantity,
   formatQuantity,
   MoneyParseError,
-} from './decimal.js';
+} from './decimal.ts';
 
-export { add, sub, neg, abs, isZero, sum, cmp, divRound, notional } from './arithmetic.js';
+export { add, sub, neg, abs, isZero, sum, cmp, divRound, notional } from './arithmetic.ts';
 
 export {
   type MoneyLocale,
@@ -26,4 +26,4 @@ export {
   DEFAULT_LOCALE,
   formatCashLocalised,
   formatCashParts,
-} from './intl.js';
+} from './intl.ts';

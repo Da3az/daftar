@@ -1,4 +1,4 @@
-import { CASH_SCALE, QUANTITY_SCALE, type Scale } from './scale.js';
+import { CASH_SCALE, QUANTITY_SCALE, type Scale } from './scale.ts';
 
 export class MoneyParseError extends Error {
   readonly input: string;
