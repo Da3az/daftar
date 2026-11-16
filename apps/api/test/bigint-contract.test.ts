@@ -3,6 +3,7 @@ import pg from 'pg';
 import { formatCash, parseCash } from '@daftar/money';
 import { useTestDatabase } from './support/test-database.ts';
 import { INT8_ARRAY_OID, INT8_OID, isBigIntTypeParserRegistered } from '../src/db/bigint.ts';
+import { TIMESTAMPTZ_OID, normaliseTimestamp } from '../src/db/timestamps.ts';
 
 /**
  * The contract this file defends: **an int8 column read through this driver is a
@@ -143,6 +144,102 @@ describe('int8 arrives as bigint', () => {
       { column_name: 'balance', t: 'bigint' },
       { column_name: 'id', t: 'bigint' },
     ]);
+  });
+});
+
+describe('timestamps keep microsecond precision', () => {
+  it('a timestamptz is an exact RFC 3339 string, not a Date', async () => {
+    const { rows } = await ctx.pool.query<{ t: string }>(
+      `SELECT '2026-01-02 03:04:05.123456+00'::timestamptz AS t`,
+    );
+
+    expect(typeof rows[0]?.t).toBe('string');
+    // All six fractional digits survive.
+    expect(rows[0]?.t).toBe('2026-01-02T03:04:05.123456Z');
+  });
+
+  it('the Date path loses the last three digits — the hazard, measured', async () => {
+    const client = new pg.Client({
+      connectionString: ctx.url,
+      application_name: 'daftar-test-date-parser',
+    });
+    await client.connect();
+
+    try {
+      // pg's default: parse timestamptz into a JavaScript Date.
+      client.setTypeParser(TIMESTAMPTZ_OID, (value: string) => new Date(value));
+
+      const { rows } = await client.query<{ t: Date }>(
+        `SELECT '2026-01-02 03:04:05.123456+00'::timestamptz AS t`,
+      );
+
+      expect(rows[0]?.t).toBeInstanceOf(Date);
+      // .456 of a millisecond is simply gone: a Date holds milliseconds.
+      expect(rows[0]?.t.toISOString()).toBe('2026-01-02T03:04:05.123Z');
+      expect(rows[0]?.t.getMilliseconds()).toBe(123);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('two rows 400 microseconds apart stay distinct, so ordering has no false ties', async () => {
+    /**
+     * This is why the precision matters rather than being pedantry. Phase 6's
+     * statement orders by `(created_at, id)` and computes a running balance over
+     * that order. Truncating to milliseconds would make these two rows compare
+     * equal — a tie the data does not contain — and a tie in a ledger's ordering
+     * is a non-deterministic running balance.
+     */
+    const { rows } = await ctx.pool.query<{ a: string; b: string }>(
+      `SELECT '2026-01-02 03:04:05.123456+00'::timestamptz AS a,
+              '2026-01-02 03:04:05.123856+00'::timestamptz AS b`,
+    );
+
+    expect(rows[0]?.a).not.toBe(rows[0]?.b);
+
+    // Whereas through a Date they would be the same instant.
+    expect(new Date(rows[0]!.a).getTime()).toBe(new Date(rows[0]!.b).getTime());
+  });
+
+  it('normalises PostgreSQL ISO output to RFC 3339 without touching digits', () => {
+    expect(normaliseTimestamp('2026-01-02 03:04:05.123456+00')).toBe('2026-01-02T03:04:05.123456Z');
+    expect(normaliseTimestamp('2026-01-02 03:04:05+00')).toBe('2026-01-02T03:04:05Z');
+    expect(normaliseTimestamp('2026-01-02 03:04:05.123456+05:30')).toBe(
+      '2026-01-02T03:04:05.123456+05:30',
+    );
+    expect(normaliseTimestamp('2026-01-02 03:04:05.123456-05')).toBe(
+      '2026-01-02T03:04:05.123456-05:00',
+    );
+    // A timestamp with no zone stays zoneless rather than acquiring a false one.
+    expect(normaliseTimestamp('2026-01-02 03:04:05.123456')).toBe('2026-01-02T03:04:05.123456');
+    // PostgreSQL's out-of-range sentinels are not timestamps and pass through.
+    expect(normaliseTimestamp('infinity')).toBe('infinity');
+    expect(normaliseTimestamp('-infinity')).toBe('-infinity');
+  });
+
+  it('the result parses with Date.parse, so a client is not forced to hand-roll', () => {
+    const value = normaliseTimestamp('2026-01-02 03:04:05.123456+00');
+    expect(Number.isNaN(Date.parse(value))).toBe(false);
+  });
+
+  it('the server runs in UTC, so offsets are stable across evidence files', async () => {
+    const { rows } = await ctx.pool.query<{ tz: string }>(
+      `SELECT current_setting('TimeZone') AS tz`,
+    );
+    expect(rows[0]?.tz).toBe('UTC');
+  });
+
+  it('every temporal column in the schema is timestamptz, never a bare timestamp', async () => {
+    // A bare `timestamp` is ambiguous the moment two processes in different
+    // zones write to it. Asserted on the catalogue so adding one fails here.
+    const { rows } = await ctx.pool.query<{ table_name: string; column_name: string }>(
+      `SELECT table_name, column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND data_type IN ('timestamp without time zone', 'time without time zone')`,
+    );
+
+    expect(rows).toEqual([]);
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "item": [
     {
-      "id": "7667ed96-6f6f-4682-be2a-2e2a7d233130",
+      "id": "219e4520-6917-48c9-b5bb-0a9a27606f10",
       "name": "health",
       "description": {
         "content": "Liveness and readiness",
@@ -9,7 +9,7 @@
       },
       "item": [
         {
-          "id": "3976ffe7-98f8-4e06-8573-0487529e1e8a",
+          "id": "e5d45987-c83b-475e-b47b-e7bba987e5ad",
           "name": "Liveness — the process is up. Touches nothing external.",
           "request": {
             "name": "Liveness — the process is up. Touches nothing external.",
@@ -55,7 +55,7 @@
           },
           "response": [
             {
-              "id": "313311ad-534c-4196-afb3-33a0c1a213bc",
+              "id": "5a60fbfb-cf4f-4b60-9e7c-6095c34a00d4",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -86,7 +86,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 7081.312876173832\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 502.2209688741353\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -97,7 +97,7 @@
           }
         },
         {
-          "id": "99a3dd9b-56de-47f8-8ac5-cffedf85a991",
+          "id": "5841c0f1-7cac-446a-ad1f-21b18a256bb5",
           "name": "Readiness — the database answers and int8 arrives as a bigint.",
           "request": {
             "name": "Readiness — the database answers and int8 arrives as a bigint.",
@@ -143,7 +143,7 @@
           },
           "response": [
             {
-              "id": "00df23e7-c193-4607-82bf-573e2a4ca494",
+              "id": "da4d7898-0d4c-406e-aafd-c42ef3d09bc1",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -174,12 +174,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "51189a87-c0da-4a63-b8ab-e4f6ec4dcef5",
+              "id": "bcaf46de-7cf8-417b-9fa5-3c66bfc89690",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -210,7 +210,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -224,17 +224,322 @@
       "event": []
     },
     {
-      "id": "c51eac3e-d604-4fd1-b06d-299cd158a5cb",
+      "id": "867cc292-94d2-40b8-82e5-0343c3f41d39",
       "name": "accounts",
       "description": {
         "content": "Accounts and balances",
         "type": "text/plain"
       },
-      "item": [],
+      "item": [
+        {
+          "id": "679362b7-144c-450e-a9dd-f2f77599ad3c",
+          "name": "Create an account.",
+          "request": {
+            "name": "Create an account.",
+            "description": {},
+            "url": {
+              "raw": "{{baseUrl}}/v1/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "accounts"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "adbebce8-c67b-4e22-8383-67f7e2d18b05",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "d4f8ed05-6eae-47f6-b078-87de3929fbfd",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "0d26b0e3-4309-40de-bbf4-3c9dda62c8ca",
+          "name": "Read an account and its stored balance.",
+          "request": {
+            "name": "Read an account and its stored balance.",
+            "description": {},
+            "url": {
+              "raw": "{{baseUrl}}/v1/accounts/:externalId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "accounts",
+                ":externalId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "cash-0001",
+                  "key": "externalId",
+                  "description": "(Required) Opaque client-facing account identifier."
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "f2f4f51b-c77d-41ee-b92f-e7f2d4aafd82",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts",
+                    ":externalId"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "cash-0001",
+                      "key": "externalId",
+                      "description": "(Required) Opaque client-facing account identifier."
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "f0206723-4e9e-4ea0-81c1-6693ef12872a",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts",
+                    ":externalId"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "cash-0001",
+                      "key": "externalId",
+                      "description": "(Required) Opaque client-facing account identifier."
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
       "event": []
     },
     {
-      "id": "6768ac6d-e5ca-4449-bb3a-7b6a226951cf",
+      "id": "9cbe0fef-d751-43b3-b0a5-a41db918fd6b",
       "name": "orders",
       "description": {
         "content": "Order placement — the measured write path",
@@ -244,17 +549,258 @@
       "event": []
     },
     {
-      "id": "4f37bba2-6f11-41ed-8048-2dedcc3c5e46",
+      "id": "c0082cdb-3cb0-42bf-80ff-d7f7d0f6bf78",
       "name": "ledger",
       "description": {
         "content": "Entries, transactions and statements",
         "type": "text/plain"
       },
-      "item": [],
+      "item": [
+        {
+          "id": "9c5bfdc4-728f-4917-9a4e-80d8bd4d6144",
+          "name": "Debit cash from an account.",
+          "request": {
+            "name": "Debit cash from an account.",
+            "description": {
+              "content": "The Phase 1 measured write path. Which implementation runs is chosen\nper request:\n\n- `x-daftar-naive-overdraft: true` — application funds check, then an\n  atomic `balance = balance - $1`. Produces **overdrafts** and\n  **zero lost updates**: the self-referential UPDATE is re-evaluated\n  against the committed row version under READ COMMITTED, so the final\n  balance is arithmetically exact, just negative.\n- `x-daftar-naive-lost-update: true` — read, compute in application code,\n  write an absolute value. **Loses updates**, so the final balance is\n  higher than it should be and money is created from nothing.\n- neither — a single guarded statement\n  (`... WHERE balance >= $1`). Correct.\n\nBoth naive paths are permanent, documented deliverables.",
+              "type": "text/plain"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/accounts/:externalId/debits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "accounts",
+                ":externalId",
+                "debits"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "cash-0001",
+                  "key": "externalId",
+                  "description": "(Required) Opaque client-facing account identifier."
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"100.00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "fad9a854-1e3e-484e-95ef-67b347256402",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts",
+                    ":externalId",
+                    "debits"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "cash-0001",
+                      "key": "externalId",
+                      "description": "(Required) Opaque client-facing account identifier."
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": \"100.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"naive_lost_update\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "b906fcfa-5525-4aeb-8e7a-dcd3d8d99e5d",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts",
+                    ":externalId",
+                    "debits"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "cash-0001",
+                      "key": "externalId",
+                      "description": "(Required) Opaque client-facing account identifier."
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": \"100.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "354f2e71-07cb-4971-af08-dde2de0969f7",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "accounts",
+                    ":externalId",
+                    "debits"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "cash-0001",
+                      "key": "externalId",
+                      "description": "(Required) Opaque client-facing account identifier."
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": \"100.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"naive_lost_update\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
       "event": []
     },
     {
-      "id": "1d81ea99-1105-4657-9719-6374c3d84756",
+      "id": "c622ea36-30e9-4793-85a6-75a79b424261",
       "name": "webhooks",
       "description": {
         "content": "Inbound provider events",
@@ -264,7 +810,7 @@
       "event": []
     },
     {
-      "id": "0a2b6f6b-8ff1-40c0-8b9b-98d081a33bfe",
+      "id": "8135717c-5b4b-48e4-9a02-71c226af604b",
       "name": "chaos",
       "description": {
         "content": "Server-side concurrency bursts for the demo",
@@ -283,7 +829,7 @@
     }
   ],
   "info": {
-    "_postman_id": "8e6e40a1-e66a-47d4-b22c-832cd1ce64d4",
+    "_postman_id": "ddcbbb81-6e91-4148-b03f-27e99ff7058f",
     "name": "Daftar API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {

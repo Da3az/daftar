@@ -21,6 +21,7 @@ import { FlagHeaderError } from './flags.ts';
 import { requestContextPlugin } from './plugins/request-context.ts';
 import { createDatabase, type Database } from './db/pool.ts';
 import { healthRoutes } from './routes/health.ts';
+import { accountRoutes } from './routes/accounts.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
 declare module 'fastify' {
@@ -232,6 +233,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   });
 
   await app.register(healthRoutes);
+  await app.register(accountRoutes);
 
   return app;
 }

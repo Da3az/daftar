@@ -1,7 +1,9 @@
-// MUST be the first import in this file. `registerBigIntTypeParser()` runs as an
-// import side effect and a Pool captures the type parsers in force when its
-// connections are created. See db/bigint.ts.
+// These two MUST be the first imports in this file. Both register `pg` type
+// parsers as an import side effect, and a Pool captures the parsers in force
+// when its connections are created. See db/bigint.ts and db/timestamps.ts for
+// why each one exists.
 import './bigint.ts';
+import './timestamps.ts';
 
 import pg from 'pg';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';

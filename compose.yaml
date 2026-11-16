@@ -43,6 +43,12 @@ services:
       # PostgreSQL 18 defaults to io_method=worker with io_workers=3. Left at the
       # default on purpose: this box has 16 vCPU and pinning io_workers=1 would
       # throttle the async I/O path the benchmarks are meant to exercise.
+      # Pinned so timestamptz output always carries a +00 offset. The driver
+      # keeps timestamps as exact strings (see src/db/timestamps.ts) and
+      # normalises them to RFC 3339; a server in a local zone would still be
+      # correct, but every evidence file would carry a different offset.
+      - -c
+      - timezone=UTC
       - -c
       - log_min_duration_statement=500
       - -c

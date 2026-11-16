@@ -186,6 +186,407 @@
           }
         }
       }
+    },
+    "/v1/accounts": {
+      "post": {
+        "summary": "Create an account.",
+        "tags": [
+          "accounts"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "externalId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                    "description": "Opaque client-facing account identifier.",
+                    "example": "cash-0001"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "customer_cash",
+                      "customer_asset",
+                      "house_cash",
+                      "house_asset",
+                      "external_funding"
+                    ]
+                  },
+                  "assetSymbol": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "openingBalance": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  }
+                },
+                "required": [
+                  "externalId",
+                  "kind"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "externalId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                      "description": "Opaque client-facing account identifier.",
+                      "example": "cash-0001"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "customer_cash",
+                        "customer_asset",
+                        "house_cash",
+                        "house_asset",
+                        "external_funding"
+                      ]
+                    },
+                    "assetSymbol": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "balance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "externalId",
+                    "kind",
+                    "assetSymbol",
+                    "balance",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{externalId}": {
+      "get": {
+        "summary": "Read an account and its stored balance.",
+        "tags": [
+          "accounts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "example": "cash-0001"
+            },
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "description": "Opaque client-facing account identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "externalId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                      "description": "Opaque client-facing account identifier.",
+                      "example": "cash-0001"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "customer_cash",
+                        "customer_asset",
+                        "house_cash",
+                        "house_asset",
+                        "external_funding"
+                      ]
+                    },
+                    "assetSymbol": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "balance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "externalId",
+                    "kind",
+                    "assetSymbol",
+                    "balance",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{externalId}/debits": {
+      "post": {
+        "summary": "Debit cash from an account.",
+        "tags": [
+          "ledger"
+        ],
+        "description": "The Phase 1 measured write path. Which implementation runs is chosen\nper request:\n\n- `x-daftar-naive-overdraft: true` — application funds check, then an\n  atomic `balance = balance - $1`. Produces **overdrafts** and\n  **zero lost updates**: the self-referential UPDATE is re-evaluated\n  against the committed row version under READ COMMITTED, so the final\n  balance is arithmetically exact, just negative.\n- `x-daftar-naive-lost-update: true` — read, compute in application code,\n  write an absolute value. **Loses updates**, so the final balance is\n  higher than it should be and money is created from nothing.\n- neither — a single guarded statement\n  (`... WHERE balance >= $1`). Correct.\n\nBoth naive paths are permanent, documented deliverables.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  }
+                },
+                "required": [
+                  "amount"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "example": "cash-0001"
+            },
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "description": "Opaque client-facing account identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "applied",
+                        "insufficient_funds"
+                      ]
+                    },
+                    "strategy": {
+                      "type": "string",
+                      "enum": [
+                        "naive_overdraft",
+                        "naive_lost_update",
+                        "guarded_atomic"
+                      ]
+                    },
+                    "balanceBefore": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "balanceAfter": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "strategy",
+                    "balanceBefore",
+                    "balanceAfter"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "applied",
+                        "insufficient_funds"
+                      ]
+                    },
+                    "strategy": {
+                      "type": "string",
+                      "enum": [
+                        "naive_overdraft",
+                        "naive_lost_update",
+                        "guarded_atomic"
+                      ]
+                    },
+                    "balanceBefore": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "balanceAfter": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "strategy",
+                    "balanceBefore",
+                    "balanceAfter"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
