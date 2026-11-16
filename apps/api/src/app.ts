@@ -149,17 +149,29 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   });
 
   /**
-   * A global, deliberately generous limit. The real protection is on the burst
-   * endpoint in Phase 8, which gets a much tighter per-IP limit of its own — a
-   * public endpoint that spawns server-side concurrency is a denial-of-service
-   * amplifier if it is not capped.
+   * A global per-IP limit, generous by default and configurable.
+   *
+   * Configurable for a specific reason: a k6 run originates from one IP, so it
+   * is indistinguishable from the abuse this limit exists to stop. The Phase 1
+   * harness's 500 virtual users tripped the default and the run measured the
+   * rate limiter rather than the ledger. Evidence runs raise
+   * `RATE_LIMIT_MAX` and record the value they used.
+   *
+   * The real protection is on the Phase 8 burst endpoint, which gets a much
+   * tighter limit of its own: a public endpoint that spawns server-side
+   * concurrency is a denial-of-service amplifier if it is not capped.
    */
   await app.register(rateLimit, {
     global: true,
-    max: 1_000,
-    timeWindow: '1 minute',
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW_MS,
     // Trust the proxy's client address only where trustProxy is also on.
     keyGenerator: (req) => req.ip,
+    // Health checks are what a load balancer and a container orchestrator use to
+    // decide whether this instance is alive. Rate-limiting them means a traffic
+    // spike gets an instance marked unhealthy and removed, which converts a
+    // throughput problem into an outage.
+    allowList: (req) => req.url.startsWith('/health/'),
   });
 
   await app.register(swagger, {

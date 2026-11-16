@@ -1,7 +1,7 @@
 {
   "item": [
     {
-      "id": "219e4520-6917-48c9-b5bb-0a9a27606f10",
+      "id": "c390ab44-c78e-4e76-b1e0-07e4079c6480",
       "name": "health",
       "description": {
         "content": "Liveness and readiness",
@@ -9,7 +9,7 @@
       },
       "item": [
         {
-          "id": "e5d45987-c83b-475e-b47b-e7bba987e5ad",
+          "id": "a2ca840e-20a1-416a-9962-e53691f882e2",
           "name": "Liveness — the process is up. Touches nothing external.",
           "request": {
             "name": "Liveness — the process is up. Touches nothing external.",
@@ -55,7 +55,7 @@
           },
           "response": [
             {
-              "id": "5a60fbfb-cf4f-4b60-9e7c-6095c34a00d4",
+              "id": "e4b3b449-7104-4f6c-8528-13f511338bc2",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -86,7 +86,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 502.2209688741353\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 4227.60279029068\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -97,7 +97,7 @@
           }
         },
         {
-          "id": "5841c0f1-7cac-446a-ad1f-21b18a256bb5",
+          "id": "2215eec5-64d6-4b25-a000-b7a15523ff06",
           "name": "Readiness — the database answers and int8 arrives as a bigint.",
           "request": {
             "name": "Readiness — the database answers and int8 arrives as a bigint.",
@@ -143,7 +143,7 @@
           },
           "response": [
             {
-              "id": "da4d7898-0d4c-406e-aafd-c42ef3d09bc1",
+              "id": "921512f8-5641-4763-901b-07ebdba9f436",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -174,12 +174,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "bcaf46de-7cf8-417b-9fa5-3c66bfc89690",
+              "id": "38ffe4e6-724c-4c24-ba08-9f525672f54a",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -210,7 +210,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -224,7 +224,7 @@
       "event": []
     },
     {
-      "id": "867cc292-94d2-40b8-82e5-0343c3f41d39",
+      "id": "a0cfe462-1e37-4a15-8a0b-5cbda98f669a",
       "name": "accounts",
       "description": {
         "content": "Accounts and balances",
@@ -232,7 +232,7 @@
       },
       "item": [
         {
-          "id": "679362b7-144c-450e-a9dd-f2f77599ad3c",
+          "id": "2de5b451-94fe-4280-803b-e50d75ff4ad2",
           "name": "Create an account.",
           "request": {
             "name": "Create an account.",
@@ -291,7 +291,7 @@
           },
           "response": [
             {
-              "id": "adbebce8-c67b-4e22-8383-67f7e2d18b05",
+              "id": "9939dde2-1bb7-4f1e-b867-c1970d99e7df",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -330,12 +330,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "d4f8ed05-6eae-47f6-b078-87de3929fbfd",
+              "id": "84c939b7-66df-46ac-b4b1-cc779460760c",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -385,7 +385,7 @@
           }
         },
         {
-          "id": "0d26b0e3-4309-40de-bbf4-3c9dda62c8ca",
+          "id": "a468085d-87a7-4ca6-9c60-ff38cd91bb15",
           "name": "Read an account and its stored balance.",
           "request": {
             "name": "Read an account and its stored balance.",
@@ -440,7 +440,7 @@
           },
           "response": [
             {
-              "id": "f2f4f51b-c77d-41ee-b92f-e7f2d4aafd82",
+              "id": "2b2ccdb5-657c-4793-8e49-4b9c6e362f5c",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -480,12 +480,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "f0206723-4e9e-4ea0-81c1-6693ef12872a",
+              "id": "ef7a7950-1196-4f28-9729-06e9cc5c47d8",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -539,7 +539,7 @@
       "event": []
     },
     {
-      "id": "9cbe0fef-d751-43b3-b0a5-a41db918fd6b",
+      "id": "2f07b63b-3e78-4f00-bbdb-8d8ba08752b3",
       "name": "orders",
       "description": {
         "content": "Order placement — the measured write path",
@@ -549,7 +549,7 @@
       "event": []
     },
     {
-      "id": "c0082cdb-3cb0-42bf-80ff-d7f7d0f6bf78",
+      "id": "f98657bd-0e3e-4003-88c4-05aaf39a3b62",
       "name": "ledger",
       "description": {
         "content": "Entries, transactions and statements",
@@ -557,7 +557,7 @@
       },
       "item": [
         {
-          "id": "9c5bfdc4-728f-4917-9a4e-80d8bd4d6144",
+          "id": "fa8ac864-d7da-4069-b48f-38a3cf767e5e",
           "name": "Debit cash from an account.",
           "request": {
             "name": "Debit cash from an account.",
@@ -629,7 +629,7 @@
           },
           "response": [
             {
-              "id": "fad9a854-1e3e-484e-95ef-67b347256402",
+              "id": "eb3bf2fd-e5e6-4973-9027-7f1d7c1a171f",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -678,12 +678,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"naive_lost_update\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"guarded_atomic\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "b906fcfa-5525-4aeb-8e7a-dcd3d8d99e5d",
+              "id": "0e670ee6-df52-4ac4-ba88-44884c371115",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -737,7 +737,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "354f2e71-07cb-4971-af08-dde2de0969f7",
+              "id": "85c6401b-32b3-44b7-b743-3eb86ceb1be3",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -786,7 +786,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"naive_lost_update\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"guarded_atomic\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -800,7 +800,7 @@
       "event": []
     },
     {
-      "id": "c622ea36-30e9-4793-85a6-75a79b424261",
+      "id": "f946f210-304c-401d-b6bd-02b9b3669027",
       "name": "webhooks",
       "description": {
         "content": "Inbound provider events",
@@ -810,7 +810,7 @@
       "event": []
     },
     {
-      "id": "8135717c-5b4b-48e4-9a02-71c226af604b",
+      "id": "d13b1fa0-f17b-463e-b9df-9a8b7039be9e",
       "name": "chaos",
       "description": {
         "content": "Server-side concurrency bursts for the demo",
@@ -829,7 +829,7 @@
     }
   ],
   "info": {
-    "_postman_id": "ddcbbb81-6e91-4148-b03f-27e99ff7058f",
+    "_postman_id": "21f3a2bc-cec4-4764-a274-e3331a685e3b",
     "name": "Daftar API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {

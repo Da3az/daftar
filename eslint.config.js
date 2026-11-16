@@ -74,10 +74,20 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked],
   },
 
+  // k6 scripts run in goja, not Node and not a browser. The globals it provides
+  // are a short, specific list — spelled out rather than borrowed from
+  // globals.node, so a script cannot reference `process` or `Buffer` and fail
+  // only at run time.
   {
     files: ['load/**/*.js'],
     languageOptions: {
-      globals: { ...globals.es2024, __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' },
+      globals: {
+        ...globals.es2024,
+        console: 'readonly',
+        __ENV: 'readonly',
+        __VU: 'readonly',
+        __ITER: 'readonly',
+      },
     },
   },
 

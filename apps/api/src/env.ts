@@ -92,6 +92,22 @@ const schema = z.object({
    */
   ALLOW_FLAG_HEADERS: boolish.optional(),
 
+  /**
+   * Global per-IP request ceiling.
+   *
+   * Configurable because a load run comes from **one** IP and is therefore
+   * indistinguishable from the abuse this limit exists to stop. Left at the
+   * default, the Phase 1 harness's 500 virtual users trip it and the run
+   * measures the rate limiter instead of the ledger — which it did, once.
+   *
+   * Every evidence file records the value that was in force. Raising it for a
+   * measurement is legitimate; raising it silently is not, which is why it is an
+   * environment variable with a conservative default rather than a hardcoded
+   * number someone has to go read the source to discover.
+   */
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(1_000),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
+
   /** Comma-separated allowlist for CORS. Empty means same-origin only. */
   CORS_ORIGINS: z
     .string()
