@@ -86,9 +86,13 @@ async function insertEntry(
   accountId: bigint,
   amount: bigint,
 ): Promise<void> {
+  // `unit` is derived from the account, exactly as the real write path does.
+  // Supplying it by hand here would let a test write a combination the composite
+  // foreign key forbids, and then assert on the wrong error.
   await client.query(
-    `INSERT INTO entries (transaction_id, account_id, amount, direction)
-     VALUES ($1::bigint, $2::bigint, $3::bigint, $4)`,
+    `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+     SELECT $1::bigint, a.id, $3::bigint, $4::entry_direction, a.unit
+       FROM accounts a WHERE a.id = $2::bigint`,
     [
       transactionId.toString(),
       accountId.toString(),
@@ -369,8 +373,8 @@ describe('CHECK constraints on a single entry', () => {
   it('rejects a zero amount', async () => {
     const result = await attempt(async (client, txnId) => {
       await client.query(
-        `INSERT INTO entries (transaction_id, account_id, amount, direction)
-         VALUES ($1::bigint, $2::bigint, 0, 'credit')`,
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         SELECT $1::bigint, a.id, 0, 'credit', a.unit FROM accounts a WHERE a.id = $2::bigint`,
         [txnId.toString(), cashAccount.toString()],
       );
     });
@@ -385,8 +389,8 @@ describe('CHECK constraints on a single entry', () => {
   it('rejects a debit with a positive amount', async () => {
     const result = await attempt(async (client, txnId) => {
       await client.query(
-        `INSERT INTO entries (transaction_id, account_id, amount, direction)
-         VALUES ($1::bigint, $2::bigint, 5000, 'debit')`,
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         SELECT $1::bigint, a.id, 5000, 'debit', a.unit FROM accounts a WHERE a.id = $2::bigint`,
         [txnId.toString(), cashAccount.toString()],
       );
     });
@@ -401,8 +405,8 @@ describe('CHECK constraints on a single entry', () => {
   it('rejects a credit with a negative amount', async () => {
     const result = await attempt(async (client, txnId) => {
       await client.query(
-        `INSERT INTO entries (transaction_id, account_id, amount, direction)
-         VALUES ($1::bigint, $2::bigint, -5000, 'credit')`,
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         SELECT $1::bigint, a.id, -5000, 'credit', a.unit FROM accounts a WHERE a.id = $2::bigint`,
         [txnId.toString(), cashAccount.toString()],
       );
     });
@@ -414,8 +418,8 @@ describe('CHECK constraints on a single entry', () => {
   it('rejects an unknown direction', async () => {
     const result = await attempt(async (client, txnId) => {
       await client.query(
-        `INSERT INTO entries (transaction_id, account_id, amount, direction)
-         VALUES ($1::bigint, $2::bigint, 5000, 'sideways')`,
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         VALUES ($1::bigint, $2::bigint, 5000, 'sideways', 'USD')`,
         [txnId.toString(), cashAccount.toString()],
       );
     });
@@ -430,8 +434,8 @@ describe('CHECK constraints on a single entry', () => {
       await client.query('BEGIN');
       await expect(
         client.query(
-          `INSERT INTO entries (transaction_id, account_id, amount, direction)
-           VALUES (999999999, $1::bigint, 5000, 'credit')`,
+          `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+           VALUES (999999999, $1::bigint, 5000, 'credit', 'USD')`,
           [cashAccount.toString()],
         ),
       ).rejects.toMatchObject({ code: SQLSTATE.foreign_key_violation });
@@ -442,13 +446,193 @@ describe('CHECK constraints on a single entry', () => {
   });
 
   it('rejects an entry referencing an account that does not exist', async () => {
+    // Inserted explicitly rather than through `insertEntry`. That helper derives
+    // `unit` by joining `accounts`, so a non-existent account makes the SELECT
+    // return no rows and insert nothing at all — the transaction then fails the
+    // leg-count check instead, which is a different constraint. To test the
+    // foreign key, the row has to actually be attempted.
+    const result = await attempt(async (client, txnId) => {
+      await client.query(
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         VALUES ($1::bigint, 999999999, -5000, 'debit', 'USD')`,
+        [txnId.toString()],
+      );
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe(SQLSTATE.foreign_key_violation);
+  });
+
+  it('a missing account yields no row, so the leg-count check catches it', async () => {
+    // The behaviour the previous test had to work around, asserted rather than
+    // left as a surprise. The production path checks for missing accounts before
+    // writing and returns `no_such_account`, so it never reaches either.
     const result = await attempt(async (client, txnId) => {
       await insertEntry(client, txnId, 999_999_999n, -5000n);
       await insertEntry(client, txnId, cashAccount, 5000n);
     });
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe(SQLSTATE.foreign_key_violation);
+    if (!result.ok) {
+      expect(result.code).toBe(SQLSTATE.check_violation);
+      expect(result.message).toContain('1 leg(s)');
+    }
+  });
+});
+
+describe('transactions balance per unit, not in aggregate', () => {
+  /**
+   * The modelling bug this guards against: a buy moves cash out and asset
+   * quantity in. With one `SUM(amount) = 0` over all four legs the arithmetic is
+   * `-notional + notional + quantity - quantity = 0` — which sums to zero while
+   * adding cents to satoshis. It would pass just as happily if a cash leg were
+   * wrong by exactly the amount an asset leg was wrong by in the other
+   * direction. That is not a balanced ledger; it is an unaudited one.
+   */
+  let btcAccount: bigint;
+  let houseBtcAccount: bigint;
+
+  beforeEach(async () => {
+    const { rows } = await ctx.pool.query<{ id: bigint; external_id: string }>(
+      `INSERT INTO accounts (external_id, kind, asset_symbol) VALUES
+         ('inv-btc', 'customer_asset', 'BTC'),
+         ('inv-house-btc', 'house_asset', 'BTC')
+       RETURNING id, external_id`,
+    );
+    btcAccount = rows.find((r) => r.external_id === 'inv-btc')!.id;
+    houseBtcAccount = rows.find((r) => r.external_id === 'inv-house-btc')!.id;
+  });
+
+  it('accounts.unit is generated from asset_symbol and cannot drift', async () => {
+    const { rows } = await ctx.pool.query<{ external_id: string; unit: string }>(
+      `SELECT external_id, unit FROM accounts ORDER BY external_id`,
+    );
+
+    expect(rows).toEqual([
+      { external_id: 'inv-btc', unit: 'BTC' },
+      { external_id: 'inv-cash', unit: 'USD' },
+      { external_id: 'inv-house', unit: 'USD' },
+      { external_id: 'inv-house-btc', unit: 'BTC' },
+    ]);
+  });
+
+  it('PostgreSQL refuses to let anyone write accounts.unit directly', async () => {
+    // A GENERATED ALWAYS column. There is no code path, anywhere, that can make
+    // it disagree with asset_symbol.
+    await expect(
+      ctx.pool.query(`UPDATE accounts SET unit = 'EUR' WHERE external_id = 'inv-cash'`),
+    ).rejects.toMatchObject({ code: '428C9' });
+  });
+
+  it('accepts a four-leg buy: cash balances in USD, quantity balances in BTC', async () => {
+    const notional = 4_771_609n; // 47,716.09 USD
+    const quantity = 50_000_000n; // 0.5 BTC
+
+    const result = await attempt(async (client, txnId) => {
+      await insertEntry(client, txnId, cashAccount, -notional);
+      await insertEntry(client, txnId, houseAccount, notional);
+      await insertEntry(client, txnId, btcAccount, quantity);
+      await insertEntry(client, txnId, houseBtcAccount, -quantity);
+    });
+
+    expect(result).toEqual({ ok: true });
+
+    const { rows } = await ctx.pool.query<{ unit: string; net_amount: bigint }>(
+      'SELECT unit, net_amount FROM ledger_totals_by_unit ORDER BY unit',
+    );
+    expect(rows).toEqual([
+      { unit: 'BTC', net_amount: 0n },
+      { unit: 'USD', net_amount: 0n },
+    ]);
+  });
+
+  it('REJECTS the cross-unit fudge that a single aggregate sum would allow', async () => {
+    /**
+     * The exact failure the per-unit check exists for. The cash side is short by
+     * 1 and the BTC side is long by 1, so a single `SUM(amount)` across all four
+     * legs is zero and a naive check passes. Per unit, both sides are wrong.
+     */
+    const notional = 4_771_609n;
+    const quantity = 50_000_000n;
+
+    const result = await attempt(async (client, txnId) => {
+      await insertEntry(client, txnId, cashAccount, -notional);
+      await insertEntry(client, txnId, houseAccount, notional - 1n);
+      await insertEntry(client, txnId, btcAccount, quantity + 1n);
+      await insertEntry(client, txnId, houseBtcAccount, -quantity);
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.constraint).toBe('entries_transaction_balanced');
+      // The message names the unit, so the page says which side is wrong.
+      expect(result.message).toMatch(/does not balance in (USD|BTC)/);
+    }
+
+    // And prove the claim: those four amounts DO sum to zero in aggregate.
+    expect(-notional + (notional - 1n) + (quantity + 1n) + -quantity).toBe(0n);
+  });
+
+  it('rejects a transaction that balances in one unit but not the other', async () => {
+    const result = await attempt(async (client, txnId) => {
+      await insertEntry(client, txnId, cashAccount, -5000n);
+      await insertEntry(client, txnId, houseAccount, 5000n);
+      // BTC side is one-sided.
+      await insertEntry(client, txnId, btcAccount, 1_000n);
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.constraint).toBe('entries_transaction_balanced');
+      expect(result.message).toContain('does not balance in BTC');
+    }
+  });
+
+  it('the composite foreign key makes a mismatched unit unrepresentable', async () => {
+    // A BTC-denominated entry against a USD account. Per-unit SUM would not
+    // catch this on its own: two such legs could balance each other while
+    // sitting on entirely the wrong accounts.
+    const result = await attempt(async (client, txnId) => {
+      await client.query(
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+         VALUES ($1::bigint, $2::bigint, 1000, 'credit', 'BTC')`,
+        [txnId.toString(), cashAccount.toString()],
+      );
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe(SQLSTATE.foreign_key_violation);
+      expect(result.constraint).toBe('entries_account_unit_fk');
+    }
+  });
+
+  it('ledger_totals_by_unit nets to zero per unit across the whole system', async () => {
+    // The system-wide invariant, statable in one query: money does not appear
+    // or vanish, it only moves.
+    const notional = 100_000n;
+    const quantity = 25_000_000n;
+
+    for (let i = 0; i < 3; i += 1) {
+      const result = await attempt(async (client, txnId) => {
+        await insertEntry(client, txnId, cashAccount, -notional);
+        await insertEntry(client, txnId, houseAccount, notional);
+        await insertEntry(client, txnId, btcAccount, quantity);
+        await insertEntry(client, txnId, houseBtcAccount, -quantity);
+      });
+      expect(result).toEqual({ ok: true });
+    }
+
+    const { rows } = await ctx.pool.query<{
+      unit: string;
+      entry_count: bigint;
+      net_amount: bigint;
+    }>('SELECT unit, entry_count, net_amount FROM ledger_totals_by_unit ORDER BY unit');
+
+    expect(rows).toEqual([
+      { unit: 'BTC', entry_count: 6n, net_amount: 0n },
+      { unit: 'USD', entry_count: 6n, net_amount: 0n },
+    ]);
   });
 });
 

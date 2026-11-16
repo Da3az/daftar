@@ -3,11 +3,13 @@ import {
   bigint,
   check,
   customType,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
@@ -120,6 +122,24 @@ export const accounts = pgTable(
       .default(sql`0`),
 
     /**
+     * What this account is denominated in: `'USD'` for cash, the asset symbol
+     * for a position.
+     *
+     * A GENERATED column derived from `asset_symbol`, so it cannot drift from it
+     * and there is no second field to keep in sync. It exists to be the target
+     * of a composite foreign key from `entries (account_id, unit)`, which makes
+     * an entry whose unit disagrees with its account **unrepresentable** rather
+     * than merely rejected.
+     *
+     * Declared here for type inference and migration diffing; the column is
+     * created in migration 0004, because drizzle-kit cannot emit
+     * `GENERATED ALWAYS AS ... STORED`.
+     */
+    unit: text('unit')
+      .notNull()
+      .generatedAlwaysAs(sql`coalesce(asset_symbol, 'USD')`),
+
+    /**
      * `mode: 'string'` keeps PostgreSQL's microsecond precision. A JavaScript
      * `Date` is millisecond-precision, so round-tripping through one truncates
      * and can manufacture ties — and a tie in a ledger ordering is a
@@ -131,6 +151,13 @@ export const accounts = pgTable(
   },
   (t) => [
     uniqueIndex('accounts_external_id_key').on(t.externalId),
+
+    /**
+     * Redundant with the primary key on `id` alone, deliberately: it is the
+     * referenced target of `entries`' composite foreign key, and PostgreSQL
+     * requires a unique constraint on exactly the referenced columns.
+     */
+    unique('accounts_id_unit_key').on(t.id, t.unit),
 
     /**
      * Asset accounts carry a symbol; cash accounts must not. Enforced here so
@@ -244,11 +271,41 @@ export const entries = pgTable(
 
     direction: entryDirection('direction').notNull(),
 
+    /**
+     * What `amount` is denominated in: `'USD'` for cash, an asset symbol for a
+     * quantity.
+     *
+     * The balance check groups by this, so **every unit in a transaction must
+     * independently sum to zero**. Without it, a four-leg buy would be checked
+     * as `-notional + notional + quantity - quantity = 0` — adding cents to
+     * satoshis, which sums to zero and means nothing.
+     *
+     * This is not FX. There is one currency and no conversion; an asset quantity
+     * is a different commodity, not a different currency, and no rate is ever
+     * applied between two units inside the ledger. The price linking them is
+     * frozen into the order and shows up only as the cash leg's amount.
+     */
+    unit: text('unit').notNull(),
+
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .notNull()
       .defaultNow(),
   },
   (t) => [
+    /**
+     * The entry's unit must be the account's unit. Enforced by a composite
+     * foreign key rather than a trigger, so the mismatch is unrepresentable
+     * rather than caught — and so the planner knows about it.
+     *
+     * Needed because per-unit `SUM = 0` alone would not catch it: two BTC legs
+     * sitting on cash accounts could still balance each other.
+     */
+    foreignKey({
+      name: 'entries_account_unit_fk',
+      columns: [t.accountId, t.unit],
+      foreignColumns: [accounts.id, accounts.unit],
+    }),
+
     /**
      * **This index is not an optimisation; the benchmark is meaningless without
      * it.**

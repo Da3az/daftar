@@ -578,9 +578,9 @@ describe('validation before BEGIN', () => {
       );
       const txnId = rows[0]!.id;
       await client.query(
-        `INSERT INTO entries (transaction_id, account_id, amount, direction) VALUES
-           ($1::bigint, $2::bigint, -10000, 'debit'),
-           ($1::bigint, $3::bigint,   9999, 'credit')`,
+        `INSERT INTO entries (transaction_id, account_id, amount, direction, unit) VALUES
+           ($1::bigint, $2::bigint, -10000, 'debit',  'USD'),
+           ($1::bigint, $3::bigint,   9999, 'credit', 'USD')`,
         [txnId.toString(), customer.toString(), house.toString()],
       );
       await expect(client.query('COMMIT')).rejects.toMatchObject({

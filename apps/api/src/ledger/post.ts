@@ -298,10 +298,12 @@ async function attemptOnce(client: pg.PoolClient, request: PostRequest): Promise
      * statement write and halves throughput under contention — for no reason.
      */
     await client.query(
-      `INSERT INTO entries (transaction_id, account_id, amount, direction)
+      `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
        SELECT $1::bigint, a.account_id, a.amount,
-              CASE WHEN a.amount < 0 THEN 'debit' ELSE 'credit' END::entry_direction
-         FROM unnest($2::bigint[], $3::bigint[]) AS a(account_id, amount)`,
+              CASE WHEN a.amount < 0 THEN 'debit' ELSE 'credit' END::entry_direction,
+              acc.unit
+         FROM unnest($2::bigint[], $3::bigint[]) AS a(account_id, amount)
+         JOIN accounts acc ON acc.id = a.account_id`,
       [
         transactionId.toString(),
         request.legs.map((l) => l.accountId.toString()),
