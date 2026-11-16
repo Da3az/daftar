@@ -342,3 +342,128 @@ export const entries = pgTable(
 
 export type Entry = typeof entries.$inferSelect;
 export type NewEntry = typeof entries.$inferInsert;
+
+/**
+ * The tradable asset list. Small and fixed — this is a brokerage demo, not an
+ * exchange.
+ *
+ * `referencePrice` is the price the **order path** uses. It is read from this
+ * table and nothing else: no feed, no cache, no network call, inside the
+ * measured write path.
+ *
+ * That is the rule the whole project's reproducibility rests on. Live prices
+ * exist in the UI for display, and they are updated into this table out of band
+ * by a separate process. If the order endpoint looked up a live price, every
+ * benchmark run would produce different amounts and no evidence file would be
+ * reproducible — the "before" and "after" numbers would differ because the
+ * market moved, not because the code changed. Benchmarks run against this table
+ * with no feed attached at all.
+ */
+export const instruments = pgTable('instruments', {
+  symbol: text('symbol').primaryKey(),
+
+  displayName: text('display_name').notNull(),
+
+  /**
+   * Cash minor units per **one whole unit** of the asset. So BTC at 95,432.17
+   * is 9_543_217 — not per-satoshi, which would need ten more digits of scale
+   * to express a cent.
+   */
+  referencePrice: bigint('reference_price', { mode: 'bigint' }).notNull(),
+
+  referencePriceAt: timestamp('reference_price_at', { withTimezone: true, mode: 'string' })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Instrument = typeof instruments.$inferSelect;
+
+export const orderSide = pgEnum('order_side', ['buy', 'sell']);
+
+export const orderStatus = pgEnum('order_status', [
+  /** Accepted, ledger entries written, awaiting settlement confirmation. */
+  'pending',
+  /** A settlement webhook confirmed it. */
+  'settled',
+  /** Rejected before any entries were written. */
+  'rejected',
+]);
+
+export const orders = pgTable(
+  'orders',
+  {
+    id: bigint('id', { mode: 'bigint' }).generatedByDefaultAsIdentity().primaryKey(),
+
+    /** Client-facing opaque identifier. */
+    externalId: text('external_id').notNull(),
+
+    /** The customer's cash account. Its `external_id` identifies the customer. */
+    cashAccountId: bigint('cash_account_id', { mode: 'bigint' })
+      .notNull()
+      .references(() => accounts.id),
+
+    /** The customer's position account for this symbol. */
+    assetAccountId: bigint('asset_account_id', { mode: 'bigint' })
+      .notNull()
+      .references(() => accounts.id),
+
+    symbol: text('symbol')
+      .notNull()
+      .references(() => instruments.symbol),
+
+    side: orderSide('side').notNull(),
+
+    /** Asset quantity at QUANTITY_SCALE (1e-8). */
+    quantity: bigint('quantity', { mode: 'bigint' }).notNull(),
+
+    /**
+     * **The frozen price.** Snapshotted from `instruments.reference_price` at
+     * the moment the order was accepted, and never re-read.
+     *
+     * Ledger entries use this number, not a live lookup. Without the freeze, a
+     * re-run of the same order would post different amounts, the evidence files
+     * would stop being reproducible, and — more seriously — the amount a
+     * customer was shown would not be the amount they were charged.
+     */
+    price: bigint('price', { mode: 'bigint' }).notNull(),
+
+    /** `quantity x price / 1e8`, rounded half-up away from zero. In cash minor units. */
+    notional: bigint('notional', { mode: 'bigint' }).notNull(),
+
+    status: orderStatus('status').notNull().default('pending'),
+
+    /** The ledger transaction this order produced. NULL only if rejected. */
+    transactionId: bigint('transaction_id', { mode: 'bigint' }).references(
+      () => ledgerTransactions.id,
+    ),
+
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('orders_external_id_key').on(t.externalId),
+    index('orders_cash_account_idx').on(t.cashAccountId, t.createdAt),
+
+    /** A zero or negative quantity is not an order. */
+    check('orders_quantity_positive', sql`${t.quantity} > 0`),
+
+    /**
+     * A non-positive price would make the notional zero or negative, and a
+     * zero-notional order would produce a cash leg of 0 that the
+     * `entries_amount_nonzero` CHECK rejects — at COMMIT, after the work. Caught
+     * here instead.
+     */
+    check('orders_price_positive', sql`${t.price} > 0`),
+    check('orders_notional_positive', sql`${t.notional} > 0`),
+
+    /** A rejected order has no transaction; anything else must have one. */
+    check(
+      'orders_transaction_matches_status',
+      sql`(${t.status} = 'rejected') = (${t.transactionId} IS NULL)`,
+    ),
+  ],
+);
+
+export type Order = typeof orders.$inferSelect;
+export type NewOrder = typeof orders.$inferInsert;

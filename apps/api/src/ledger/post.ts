@@ -92,6 +92,22 @@ export interface PostRequest {
    * barrier, for the reason above.
    */
   beforeWrite?: () => Promise<void>;
+
+  /**
+   * Extra work to run **in the same database transaction**, after the entries
+   * and snapshot updates and before COMMIT.
+   *
+   * This is how a caller writes its own row — an `orders` row, a Phase 5 outbox
+   * row — atomically with the ledger entries it describes. Atomically is the
+   * whole point: an order row that exists without its entries, or entries
+   * without their order row, is a reconciliation problem that someone discovers
+   * later by hand.
+   *
+   * Runs on **every attempt**, so it must be idempotent with respect to a
+   * rolled-back attempt. That is free here, because a retried attempt is a new
+   * transaction and the previous one left nothing behind.
+   */
+  withinTransaction?: (client: pg.PoolClient, transactionId: bigint) => Promise<void>;
 }
 
 export interface PostAttemptStats {
@@ -335,6 +351,10 @@ async function attemptOnce(client: pg.PoolClient, request: PostRequest): Promise
         [...net.values()].map((delta) => delta.toString()),
       ],
     );
+
+    if (request.withinTransaction) {
+      await request.withinTransaction(client, transactionId);
+    }
 
     await client.query('COMMIT');
 

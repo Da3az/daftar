@@ -1,7 +1,7 @@
 {
   "item": [
     {
-      "id": "c390ab44-c78e-4e76-b1e0-07e4079c6480",
+      "id": "ed0d3d53-12a2-40e8-88ef-083b31fcae12",
       "name": "health",
       "description": {
         "content": "Liveness and readiness",
@@ -9,7 +9,7 @@
       },
       "item": [
         {
-          "id": "a2ca840e-20a1-416a-9962-e53691f882e2",
+          "id": "c69b2713-8731-44a6-b589-dd0e7978ea5c",
           "name": "Liveness — the process is up. Touches nothing external.",
           "request": {
             "name": "Liveness — the process is up. Touches nothing external.",
@@ -55,7 +55,7 @@
           },
           "response": [
             {
-              "id": "e4b3b449-7104-4f6c-8528-13f511338bc2",
+              "id": "4a0ef12b-8f57-423c-9708-6e246214b56c",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -86,7 +86,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 4227.60279029068\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 6309.823294144743\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -97,7 +97,7 @@
           }
         },
         {
-          "id": "2215eec5-64d6-4b25-a000-b7a15523ff06",
+          "id": "da1da13c-5351-4e8e-b99f-278e2adf650a",
           "name": "Readiness — the database answers and int8 arrives as a bigint.",
           "request": {
             "name": "Readiness — the database answers and int8 arrives as a bigint.",
@@ -143,7 +143,7 @@
           },
           "response": [
             {
-              "id": "921512f8-5641-4763-901b-07ebdba9f436",
+              "id": "9e82fb9e-ded9-4c93-a95b-5f365de9e472",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -179,7 +179,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "38ffe4e6-724c-4c24-ba08-9f525672f54a",
+              "id": "a9697173-3c67-413c-88d8-cccc8f915e07",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -224,7 +224,7 @@
       "event": []
     },
     {
-      "id": "a0cfe462-1e37-4a15-8a0b-5cbda98f669a",
+      "id": "3c934549-a5de-4d35-9c23-4dcc31cda09a",
       "name": "accounts",
       "description": {
         "content": "Accounts and balances",
@@ -232,7 +232,7 @@
       },
       "item": [
         {
-          "id": "2de5b451-94fe-4280-803b-e50d75ff4ad2",
+          "id": "4ec2b0cc-f68f-49a6-bd20-6a56bfcf2139",
           "name": "Create an account.",
           "request": {
             "name": "Create an account.",
@@ -281,7 +281,7 @@
             "auth": null,
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -291,7 +291,7 @@
           },
           "response": [
             {
-              "id": "9939dde2-1bb7-4f1e-b867-c1970d99e7df",
+              "id": "a6cfc685-086c-439c-af3b-575d792f2105",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -314,7 +314,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -330,12 +330,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "84c939b7-66df-46ac-b4b1-cc779460760c",
+              "id": "35e5dbda-931e-422e-aa21-1ebea27ad653",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -358,7 +358,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -385,7 +385,7 @@
           }
         },
         {
-          "id": "a468085d-87a7-4ca6-9c60-ff38cd91bb15",
+          "id": "72206555-ceac-4acd-bfed-6df2a2130cf3",
           "name": "Read an account and its stored balance.",
           "request": {
             "name": "Read an account and its stored balance.",
@@ -440,7 +440,7 @@
           },
           "response": [
             {
-              "id": "2b2ccdb5-657c-4793-8e49-4b9c6e362f5c",
+              "id": "b344c6a4-4f06-43c8-bc39-ee367eccdadf",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -480,12 +480,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "ef7a7950-1196-4f28-9729-06e9cc5c47d8",
+              "id": "3c03d8c6-983f-46e1-8170-1009086be808",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -539,17 +539,350 @@
       "event": []
     },
     {
-      "id": "2f07b63b-3e78-4f00-bbdb-8d8ba08752b3",
+      "id": "55319cd6-71b3-4640-a198-71755586aef6",
       "name": "orders",
       "description": {
         "content": "Order placement — the measured write path",
         "type": "text/plain"
       },
-      "item": [],
+      "item": [
+        {
+          "id": "add4e825-5b21-4d85-b38a-35d76f63f175",
+          "name": "Place an order. The measured write path.",
+          "request": {
+            "name": "Place an order. The measured write path.",
+            "description": {
+              "content": "Writes four ledger entries in one transaction — two in USD, two in the\nasset — plus the order row, atomically.\n\n**The price is frozen at order time** from the `instruments` table and\nnever re-read. This endpoint makes no network call of any kind: no\nprice feed, no third-party API, no DNS. That is what makes the\nbenchmark numbers in docs/evidence/ reproducible, and what makes the\namount quoted the amount charged.\n\nThe concurrency strategy is chosen per request via\n`x-daftar-concurrency-mode`: `pessimistic`, `serializable` or\n`advisory`. All three are correct; see the trade-off table in the\nREADME. `attempts` in the response reports how many tries the write\ntook, which is non-trivial only under `serializable`.",
+              "type": "text/plain"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "bdf71304-9440-4379-8f5e-8aec8506a171",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "orders"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"rejected\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": 2966564864583335\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "5ff1ffc1-52d8-40e2-97e5-55a8f6b72655",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "orders"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\",\n  \"available\": \"1000.00\",\n  \"required\": \"1000.00\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "ed1e1fcc-e42d-4c6a-91bc-0e2892f599c0",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "orders"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\",\n  \"available\": \"1000.00\",\n  \"required\": \"1000.00\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "edc19a08-3812-4250-bbe0-aa40a3a8ae0d",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "orders"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"string\",\n  \"message\": \"string\",\n  \"available\": \"1000.00\",\n  \"required\": \"1000.00\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "db081a79-3f67-4999-ba15-5389f96b04d8",
+          "name": "The fixed asset list and the reference prices orders are priced at.",
+          "request": {
+            "name": "The fixed asset list and the reference prices orders are priced at.",
+            "description": {},
+            "url": {
+              "raw": "{{baseUrl}}/v1/instruments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "instruments"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "847f4e1f-ced8-4e95-915e-54506fd6f473",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "instruments"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"symbol\": \"string\",\n    \"displayName\": \"string\",\n    \"referencePrice\": \"1000.00\",\n    \"referencePriceAt\": \"string\"\n  },\n  {\n    \"symbol\": \"string\",\n    \"displayName\": \"string\",\n    \"referencePrice\": \"1000.00\",\n    \"referencePriceAt\": \"string\"\n  }\n]",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
       "event": []
     },
     {
-      "id": "f98657bd-0e3e-4003-88c4-05aaf39a3b62",
+      "id": "76d04e72-2713-45da-8559-bccd600de716",
       "name": "ledger",
       "description": {
         "content": "Entries, transactions and statements",
@@ -557,7 +890,7 @@
       },
       "item": [
         {
-          "id": "fa8ac864-d7da-4069-b48f-38a3cf767e5e",
+          "id": "9f662621-313d-4984-807e-79d8dcdaa2a5",
           "name": "Debit cash from an account.",
           "request": {
             "name": "Debit cash from an account.",
@@ -629,7 +962,7 @@
           },
           "response": [
             {
-              "id": "eb3bf2fd-e5e6-4973-9027-7f1d7c1a171f",
+              "id": "d7032e4f-3855-489e-8e7e-c9f9ec2d033b",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -683,7 +1016,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "0e670ee6-df52-4ac4-ba88-44884c371115",
+              "id": "71de9b41-09ea-4aac-b5a4-dafd916a03f1",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -737,7 +1070,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "85c6401b-32b3-44b7-b743-3eb86ceb1be3",
+              "id": "2848c2aa-c7a6-435b-ae15-cfd748718d79",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -800,7 +1133,7 @@
       "event": []
     },
     {
-      "id": "f946f210-304c-401d-b6bd-02b9b3669027",
+      "id": "c531cfe2-efba-4a47-83f6-7f2e54ebf8b4",
       "name": "webhooks",
       "description": {
         "content": "Inbound provider events",
@@ -810,7 +1143,7 @@
       "event": []
     },
     {
-      "id": "d13b1fa0-f17b-463e-b9df-9a8b7039be9e",
+      "id": "7903c0d7-9e98-4cc0-8a6a-328786a17af0",
       "name": "chaos",
       "description": {
         "content": "Server-side concurrency bursts for the demo",
@@ -829,7 +1162,7 @@
     }
   ],
   "info": {
-    "_postman_id": "21f3a2bc-cec4-4764-a274-e3331a685e3b",
+    "_postman_id": "f173d5a1-3769-4721-bd25-43fc4fbfcb83",
     "name": "Daftar API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {

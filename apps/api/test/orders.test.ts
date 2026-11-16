@@ -1,0 +1,390 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { formatCash, parseCash, parseQuantity } from '@daftar/money';
+import { useTestDatabase } from './support/test-database.ts';
+import { Barrier } from './support/barrier.ts';
+import {
+  HOUSE_CASH_EXTERNAL_ID,
+  houseAssetExternalId,
+  placeOrder,
+  positionExternalId,
+} from '../src/orders/place.ts';
+import { LEDGER_CONCURRENCY_MODES } from '../src/env.ts';
+
+const ctx = useTestDatabase({ poolMax: 30 });
+
+const CUSTOMER = 'cust-1';
+const OPENING = parseCash('1000000.00');
+
+/** The seeded BTC reference price, from migration 0005. */
+const BTC_PRICE = 9_543_217n; // 95,432.17
+
+beforeEach(async () => {
+  await ctx.pool.query('ALTER TABLE entries DISABLE TRIGGER entries_no_delete');
+  await ctx.pool.query('DELETE FROM orders');
+  await ctx.pool.query('DELETE FROM entries');
+  await ctx.pool.query('ALTER TABLE entries ENABLE TRIGGER entries_no_delete');
+  await ctx.pool.query('DELETE FROM ledger_transactions');
+  await ctx.pool.query('DELETE FROM accounts');
+
+  /**
+   * Reset the reference price too.
+   *
+   * Not defensive clutter — it was a real bug in this file. One test moves the
+   * BTC price to prove an existing order's frozen price does not follow it, and
+   * without this reset every later test priced its orders at 2x and funded
+   * accounts came up short. The symptom was "expected 2 to be 5" in a
+   * *concurrency* test, which is a long way from the cause.
+   *
+   * `instruments` is reference data that tests mutate, so it belongs in the
+   * reset like any other table.
+   */
+  await ctx.pool.query(`UPDATE instruments SET reference_price = $1::bigint WHERE symbol = 'BTC'`, [
+    BTC_PRICE.toString(),
+  ]);
+
+  await ctx.pool.query(
+    `INSERT INTO accounts (external_id, kind, asset_symbol, balance) VALUES
+       ($1, 'customer_cash',   NULL,  $2::bigint),
+       ($3, 'customer_asset', 'BTC',  0),
+       ($4, 'house_cash',      NULL,  0),
+       ($5, 'house_asset',    'BTC',  0)`,
+    [
+      CUSTOMER,
+      OPENING.toString(),
+      positionExternalId(CUSTOMER, 'BTC'),
+      HOUSE_CASH_EXTERNAL_ID,
+      houseAssetExternalId('BTC'),
+    ],
+  );
+});
+
+const balanceOf = async (externalId: string): Promise<bigint> => {
+  const { rows } = await ctx.pool.query<{ balance: bigint }>(
+    'SELECT balance FROM accounts WHERE external_id = $1',
+    [externalId],
+  );
+  return rows[0]!.balance;
+};
+
+const buy = (externalId: string, quantity: string, mode = 'serializable' as const) =>
+  placeOrder(ctx.pool, {
+    externalId,
+    cashAccountExternalId: CUSTOMER,
+    symbol: 'BTC',
+    side: 'buy',
+    quantity: parseQuantity(quantity),
+    mode,
+  });
+
+describe('placing an order', () => {
+  it('writes four entries — two in USD, two in BTC — and the order row, atomically', async () => {
+    const result = await buy('ord-1', '0.5');
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+
+    // 0.5 BTC at 95,432.17 = 47,716.085 -> 47,716.09 (half away from zero)
+    expect(formatCash(result.order.notional)).toBe('47716.09');
+    expect(result.order.price).toBe(BTC_PRICE);
+
+    const { rows } = await ctx.pool.query<{ unit: string; n: bigint; net: bigint }>(
+      `SELECT unit, count(*) AS n, sum(amount)::bigint AS net
+         FROM entries GROUP BY unit ORDER BY unit`,
+    );
+
+    expect(rows).toEqual([
+      { unit: 'BTC', n: 2n, net: 0n },
+      { unit: 'USD', n: 2n, net: 0n },
+    ]);
+
+    const { rows: orderRows } = await ctx.pool.query<{ n: bigint; transaction_id: bigint }>(
+      'SELECT count(*) AS n, max(transaction_id) AS transaction_id FROM orders',
+    );
+    expect(orderRows[0]?.n).toBe(1n);
+    expect(orderRows[0]?.transaction_id).toBe(result.order.transactionId);
+  });
+
+  it('moves cash and quantity in opposite directions', async () => {
+    const result = await buy('ord-2', '0.5');
+    if (result.status !== 'placed') throw new Error('expected placed');
+
+    expect(await balanceOf(CUSTOMER)).toBe(OPENING - result.order.notional);
+    expect(await balanceOf(HOUSE_CASH_EXTERNAL_ID)).toBe(result.order.notional);
+    expect(await balanceOf(positionExternalId(CUSTOMER, 'BTC'))).toBe(parseQuantity('0.5'));
+    expect(await balanceOf(houseAssetExternalId('BTC'))).toBe(-parseQuantity('0.5'));
+  });
+
+  it('a sell reverses both directions', async () => {
+    await buy('ord-3', '1');
+
+    const result = await placeOrder(ctx.pool, {
+      externalId: 'ord-4',
+      cashAccountExternalId: CUSTOMER,
+      symbol: 'BTC',
+      side: 'sell',
+      quantity: parseQuantity('0.25'),
+      mode: 'serializable',
+    });
+
+    expect(result.status).toBe('placed');
+    expect(await balanceOf(positionExternalId(CUSTOMER, 'BTC'))).toBe(parseQuantity('0.75'));
+  });
+
+  it('refuses a buy the cash cannot cover, writing nothing', async () => {
+    const result = await buy('ord-5', '1000');
+
+    expect(result.status).toBe('insufficient_funds');
+    expect(await balanceOf(CUSTOMER)).toBe(OPENING);
+
+    const { rows } = await ctx.pool.query<{ n: bigint }>('SELECT count(*) AS n FROM orders');
+    // No order row either: it is written inside the same transaction.
+    expect(rows[0]?.n).toBe(0n);
+  });
+
+  it('refuses a sell of a position that is not held', async () => {
+    const result = await placeOrder(ctx.pool, {
+      externalId: 'ord-6',
+      cashAccountExternalId: CUSTOMER,
+      symbol: 'BTC',
+      side: 'sell',
+      quantity: parseQuantity('1'),
+      mode: 'serializable',
+    });
+
+    expect(result.status).toBe('insufficient_funds');
+  });
+
+  it('rejects a quantity whose notional rounds to zero, before doing any work', async () => {
+    // 1 satoshi of ARB at 0.87 is 0.0000000087 cash.
+    await ctx.pool.query(
+      `INSERT INTO accounts (external_id, kind, asset_symbol) VALUES
+         ($1, 'customer_asset', 'ARB'), ($2, 'house_asset', 'ARB')`,
+      [positionExternalId(CUSTOMER, 'ARB'), houseAssetExternalId('ARB')],
+    );
+
+    const result = await placeOrder(ctx.pool, {
+      externalId: 'ord-7',
+      cashAccountExternalId: CUSTOMER,
+      symbol: 'ARB',
+      side: 'buy',
+      quantity: 1n,
+      mode: 'serializable',
+    });
+
+    // Caught before BEGIN. At COMMIT it would have surfaced as
+    // entries_amount_nonzero — a constraint name, after all the work.
+    expect(result.status).toBe('quantity_rounds_to_zero');
+    const { rows } = await ctx.pool.query<{ n: bigint }>(
+      'SELECT count(*) AS n FROM ledger_transactions',
+    );
+    expect(rows[0]?.n).toBe(0n);
+  });
+
+  it('reports an unknown instrument separately from an unknown account', async () => {
+    expect(
+      (
+        await placeOrder(ctx.pool, {
+          externalId: 'ord-8',
+          cashAccountExternalId: CUSTOMER,
+          symbol: 'DOGE',
+          side: 'buy',
+          quantity: parseQuantity('1'),
+          mode: 'serializable',
+        })
+      ).status,
+    ).toBe('unknown_instrument');
+
+    expect(
+      (
+        await placeOrder(ctx.pool, {
+          externalId: 'ord-9',
+          cashAccountExternalId: 'nobody',
+          symbol: 'BTC',
+          side: 'buy',
+          quantity: parseQuantity('1'),
+          mode: 'serializable',
+        })
+      ).status,
+    ).toBe('unknown_account');
+  });
+
+  it('rejects a non-positive quantity', async () => {
+    await expect(
+      placeOrder(ctx.pool, {
+        externalId: 'ord-10',
+        cashAccountExternalId: CUSTOMER,
+        symbol: 'BTC',
+        side: 'buy',
+        quantity: 0n,
+        mode: 'serializable',
+      }),
+    ).rejects.toThrow(RangeError);
+  });
+});
+
+describe('the frozen price', () => {
+  it('is snapshotted into the order and used by the entries', async () => {
+    const result = await buy('frozen-1', '1');
+    if (result.status !== 'placed') throw new Error('expected placed');
+
+    const { rows } = await ctx.pool.query<{ price: bigint; notional: bigint }>(
+      'SELECT price, notional FROM orders WHERE external_id = $1',
+      ['frozen-1'],
+    );
+
+    expect(rows[0]?.price).toBe(BTC_PRICE);
+    expect(rows[0]?.notional).toBe(BTC_PRICE); // 1 whole unit
+  });
+
+  it('a later price change does NOT alter an existing order', async () => {
+    const first = await buy('frozen-2', '1');
+    if (first.status !== 'placed') throw new Error('expected placed');
+
+    // The market moves.
+    await ctx.pool.query(
+      `UPDATE instruments SET reference_price = $1::bigint WHERE symbol = 'BTC'`,
+      [(BTC_PRICE * 2n).toString()],
+    );
+
+    const { rows } = await ctx.pool.query<{ price: bigint }>(
+      'SELECT price FROM orders WHERE external_id = $1',
+      ['frozen-2'],
+    );
+
+    // The order still records what the customer was charged.
+    expect(rows[0]?.price).toBe(BTC_PRICE);
+
+    // A new order picks up the new price, which is also correct.
+    const second = await buy('frozen-3', '1');
+    if (second.status !== 'placed') throw new Error('expected placed');
+    expect(second.order.price).toBe(BTC_PRICE * 2n);
+  });
+
+  it('two orders at the same price produce byte-identical amounts', async () => {
+    // The reproducibility property every evidence file depends on. With a live
+    // price lookup these would differ and no benchmark would be comparable.
+    const a = await buy('repro-1', '0.333');
+    const b = await buy('repro-2', '0.333');
+
+    if (a.status !== 'placed' || b.status !== 'placed') throw new Error('expected placed');
+    expect(a.order.notional).toBe(b.order.notional);
+    expect(a.order.price).toBe(b.order.price);
+  });
+});
+
+describe.each(LEDGER_CONCURRENCY_MODES)('%s — concurrent orders on one account', (mode) => {
+  const CONCURRENCY = 10;
+
+  it('never overdraws and the ledger always balances', async () => {
+    // Fund exactly 5 orders' worth.
+    const quantity = parseQuantity('1');
+    const perOrder = BTC_PRICE;
+    await ctx.pool.query('UPDATE accounts SET balance = $1::bigint WHERE external_id = $2', [
+      (perOrder * 5n).toString(),
+      CUSTOMER,
+    ]);
+
+    const barrier = new Barrier(CONCURRENCY);
+
+    const results = await Promise.all(
+      Array.from({ length: CONCURRENCY }, (_, i) =>
+        placeOrder(ctx.pool, {
+          externalId: `conc-${mode}-${String(i)}`,
+          cashAccountExternalId: CUSTOMER,
+          symbol: 'BTC',
+          side: 'buy',
+          quantity,
+          mode,
+          maxAttempts: 25,
+          barrier: () => barrier.arriveAndWait(),
+        }),
+      ),
+    );
+
+    const placed = results.filter((r) => r.status === 'placed').length;
+    const refused = results.filter((r) => r.status === 'insufficient_funds').length;
+
+    expect(placed).toBe(5);
+    expect(refused).toBe(5);
+    expect(await balanceOf(CUSTOMER)).toBe(0n);
+
+    // Every unit nets to zero across the whole system, always.
+    const { rows } = await ctx.pool.query<{ unit: string; net_amount: bigint }>(
+      'SELECT unit, net_amount FROM ledger_totals_by_unit ORDER BY unit',
+    );
+    expect(rows).toEqual([
+      { unit: 'BTC', net_amount: 0n },
+      { unit: 'USD', net_amount: 0n },
+    ]);
+
+    // One order row per successful placement, no more.
+    const { rows: orderRows } = await ctx.pool.query<{ n: bigint }>(
+      'SELECT count(*) AS n FROM orders',
+    );
+    expect(orderRows[0]?.n).toBe(BigInt(placed));
+  });
+
+  it('the stored snapshots agree with the entries behind them', async () => {
+    await ctx.pool.query('UPDATE accounts SET balance = 0');
+    await ctx.pool.query('UPDATE accounts SET balance = $1::bigint WHERE external_id = $2', [
+      (BTC_PRICE * BigInt(CONCURRENCY)).toString(),
+      CUSTOMER,
+    ]);
+
+    const barrier = new Barrier(CONCURRENCY);
+    await Promise.all(
+      Array.from({ length: CONCURRENCY }, (_, i) =>
+        placeOrder(ctx.pool, {
+          externalId: `drift-${mode}-${String(i)}`,
+          cashAccountExternalId: CUSTOMER,
+          symbol: 'BTC',
+          side: 'buy',
+          quantity: parseQuantity('1'),
+          mode,
+          maxAttempts: 25,
+          barrier: () => barrier.arriveAndWait(),
+        }),
+      ),
+    );
+
+    // Only the customer's cash account has an opening balance with no entry
+    // behind it; everything else must be exactly explained by its entries.
+    const { rows } = await ctx.pool.query<{ external_id: string; drift: bigint }>(
+      'SELECT external_id, drift FROM account_derived_balances WHERE drift <> 0',
+    );
+    expect(rows.map((r) => r.external_id)).toEqual([CUSTOMER]);
+  });
+});
+
+describe('order constraints are enforced by the database', () => {
+  it('rejects a duplicate external id', async () => {
+    await buy('dup-1', '0.1');
+    await expect(buy('dup-1', '0.1')).rejects.toMatchObject({ code: '23505' });
+  });
+
+  it('rejects a non-rejected order with no transaction', async () => {
+    await expect(
+      ctx.pool.query(
+        `INSERT INTO orders (external_id, cash_account_id, asset_account_id, symbol, side,
+                             quantity, price, notional, status, transaction_id)
+         SELECT 'bad-1', c.id, a.id, 'BTC', 'buy', 1, 1, 1, 'pending', NULL
+           FROM accounts c, accounts a
+          WHERE c.external_id = $1 AND a.external_id = $2`,
+        [CUSTOMER, positionExternalId(CUSTOMER, 'BTC')],
+      ),
+    ).rejects.toMatchObject({ constraint: 'orders_transaction_matches_status' });
+  });
+
+  it('rejects a zero quantity at the database level too', async () => {
+    await expect(
+      ctx.pool.query(
+        `INSERT INTO orders (external_id, cash_account_id, asset_account_id, symbol, side,
+                             quantity, price, notional, status, transaction_id)
+         SELECT 'bad-2', c.id, a.id, 'BTC', 'buy', 0, 1, 1, 'rejected', NULL
+           FROM accounts c, accounts a
+          WHERE c.external_id = $1 AND a.external_id = $2`,
+        [CUSTOMER, positionExternalId(CUSTOMER, 'BTC')],
+      ),
+    ).rejects.toMatchObject({ constraint: 'orders_quantity_positive' });
+  });
+});

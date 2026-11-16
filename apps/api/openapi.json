@@ -587,6 +587,304 @@
           }
         }
       }
+    },
+    "/v1/orders": {
+      "post": {
+        "summary": "Place an order. The measured write path.",
+        "tags": [
+          "orders"
+        ],
+        "description": "Writes four ledger entries in one transaction — two in USD, two in the\nasset — plus the order row, atomically.\n\n**The price is frozen at order time** from the `instruments` table and\nnever re-read. This endpoint makes no network call of any kind: no\nprice feed, no third-party API, no DNS. That is what makes the\nbenchmark numbers in docs/evidence/ reproducible, and what makes the\namount quoted the amount charged.\n\nThe concurrency strategy is chosen per request via\n`x-daftar-concurrency-mode`: `pessimistic`, `serializable` or\n`advisory`. All three are correct; see the trade-off table in the\nREADME. `attempts` in the response reports how many tries the write\ntook, which is non-trivial only under `serializable`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "externalId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                    "description": "Caller-supplied unique id for this order.",
+                    "example": "cash-0001"
+                  },
+                  "accountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                    "description": "The customer's cash account external id.",
+                    "example": "cash-0001"
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16,
+                    "description": "Instrument symbol, e.g. BTC."
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Asset quantity as an exact decimal string with at most 8 fractional digits. Never a JSON number.",
+                    "example": "0.50000000"
+                  }
+                },
+                "required": [
+                  "externalId",
+                  "accountId",
+                  "symbol",
+                  "side",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "externalId": {
+                      "type": "string"
+                    },
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "side": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell"
+                      ]
+                    },
+                    "quantity": {
+                      "type": "string",
+                      "description": "Exact decimal string, 8 fractional digits."
+                    },
+                    "price": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "The price frozen into this order. Never re-read.",
+                      "example": "1000.00"
+                    },
+                    "notional": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "settled",
+                        "rejected"
+                      ]
+                    },
+                    "transactionId": {
+                      "type": "string",
+                      "description": "Ledger transaction id, as a decimal string."
+                    },
+                    "cashBalanceAfter": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "assetBalanceAfter": {
+                      "type": "string"
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "externalId",
+                    "symbol",
+                    "side",
+                    "quantity",
+                    "price",
+                    "notional",
+                    "status",
+                    "transactionId",
+                    "cashBalanceAfter",
+                    "assetBalanceAfter",
+                    "attempts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "required": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "required": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "required": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/instruments": {
+      "get": {
+        "summary": "The fixed asset list and the reference prices orders are priced at.",
+        "tags": [
+          "orders"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "symbol": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "referencePrice": {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?$",
+                        "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                        "example": "1000.00"
+                      },
+                      "referencePriceAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "symbol",
+                      "displayName",
+                      "referencePrice",
+                      "referencePriceAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
