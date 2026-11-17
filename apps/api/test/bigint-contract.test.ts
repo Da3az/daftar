@@ -68,7 +68,12 @@ describe('int8 arrives as bigint', () => {
       `INSERT INTO accounts (external_id, kind) VALUES ('count-a', 'customer_cash'), ('count-b', 'customer_cash')`,
     );
 
-    const { rows } = await ctx.pool.query<{ n: bigint }>('SELECT count(*) AS n FROM accounts');
+    // Scoped to this test's own rows. The migrated template now carries the
+    // 64 house shard accounts from migration 0006, so counting the whole table
+    // would couple this assertion to seed data it does not care about.
+    const { rows } = await ctx.pool.query<{ n: bigint }>(
+      `SELECT count(*) AS n FROM accounts WHERE external_id LIKE 'count-%'`,
+    );
 
     expect(typeof rows[0]?.n).toBe('bigint');
     expect(rows[0]?.n).toBe(2n);

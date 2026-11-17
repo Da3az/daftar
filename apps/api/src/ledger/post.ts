@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { sum } from '@daftar/money';
-import type { LedgerConcurrencyMode } from '../env.ts';
+import { env, type LedgerConcurrencyMode } from '../env.ts';
 import { DEADLOCK_DETECTED, SERIALIZATION_FAILURE, isRetryable, sqlstateOf } from './sqlstate.ts';
 
 /**
@@ -134,7 +134,11 @@ export type PostResult =
     } & PostAttemptStats)
   | ({ status: 'no_such_account'; accountId: bigint } & PostAttemptStats);
 
-export const DEFAULT_MAX_ATTEMPTS = 5;
+/**
+ * Default retry bound, from `LEDGER_MAX_ATTEMPTS`. A caller may override it per
+ * request; the benchmark does, to measure the trade-off at several bounds.
+ */
+export const defaultMaxAttempts = (): number => env.LEDGER_MAX_ATTEMPTS;
 
 export class UnbalancedTransactionError extends Error {
   constructor(net: bigint) {
@@ -216,7 +220,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 export async function post(pool: pg.Pool, request: PostRequest): Promise<PostResult> {
   validate(request);
 
-  const maxAttempts = request.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const maxAttempts = request.maxAttempts ?? defaultMaxAttempts();
   const stats: PostAttemptStats = { attempts: 0, serializationFailures: 0, deadlocks: 0 };
 
   // Once, before the first attempt and before any connection is taken from the

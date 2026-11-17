@@ -80,7 +80,9 @@ describe('two transactions really are concurrent', () => {
 
       // First transaction is still open and holding an uncommitted row.
       await second.query('BEGIN');
-      const { rows } = await second.query<{ n: bigint }>('SELECT count(*) AS n FROM accounts');
+      const { rows } = await second.query<{ n: bigint }>(
+        `SELECT count(*) AS n FROM accounts WHERE external_id LIKE 'concurrent-%'`,
+      );
 
       // READ COMMITTED: the second transaction cannot see the uncommitted row,
       // which is itself proof the two have separate snapshots rather than being
@@ -94,7 +96,7 @@ describe('two transactions really are concurrent', () => {
       await first.query('COMMIT');
 
       const { rows: after } = await ctx.pool.query<{ n: bigint }>(
-        'SELECT count(*) AS n FROM accounts',
+        `SELECT count(*) AS n FROM accounts WHERE external_id LIKE 'concurrent-%'`,
       );
       expect(after[0]?.n).toBe(2n);
     } finally {
@@ -174,7 +176,9 @@ describe('isolation between test databases', () => {
         `INSERT INTO accounts (external_id, kind) VALUES ('only-in-ctx', 'customer_cash')`,
       );
 
-      const { rows } = await other.pool.query<{ n: bigint }>('SELECT count(*) AS n FROM accounts');
+      const { rows } = await other.pool.query<{ n: bigint }>(
+        `SELECT count(*) AS n FROM accounts WHERE external_id = 'only-in-ctx'`,
+      );
       expect(rows[0]?.n).toBe(0n);
 
       // Same schema, different data — which is the template guarantee.
@@ -182,7 +186,6 @@ describe('isolation between test databases', () => {
         `SELECT count(*) AS n FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'accounts'`,
       );
-      expect(rows[0]?.n).toBe(0n);
       expect(cols[0]!.n).toBeGreaterThan(0n);
     } finally {
       await other.drop();

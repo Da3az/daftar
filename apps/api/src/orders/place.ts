@@ -26,7 +26,54 @@ import { post, type Leg, type PostAttemptStats } from '../ledger/post.ts';
  *    quoting and posting is a real customer-facing bug, not a theoretical one.
  */
 
-/** Well-known external ids for the house side of every trade. */
+/**
+ * ## The house counterparty is sharded, and it had to be
+ *
+ * Phase 3's first benchmark against the 10M-row seed found that the account
+ * spread made **no difference at all**: pessimistic and advisory sat near
+ * 200 orders/s whether the load was spread over 1 account or 1000, and
+ * serializable failed 88% of requests with SQLSTATE 40001.
+ *
+ * The cause was in the schema, not the strategies. Every order is four legs —
+ * customer cash, customer position, house cash, house position — and the house
+ * side was *two rows* touched by every order ever placed (2,543,857 entries
+ * each, against 17,261 on the busiest customer). Spreading three quarters of a
+ * transaction does not spread the transaction.
+ *
+ * So the house accounts are sharded 16 ways, and a customer maps to a fixed
+ * shard. Fixed rather than random for two reasons:
+ *
+ *  1. **Per-account ordering is preserved.** A customer's orders always touch
+ *     the same house rows, so no new interleaving is introduced — which matters
+ *     for Phase 5's per-account ordering guarantee.
+ *  2. **The lock order stays total.** `post()` sorts account ids before
+ *     acquiring, so more shards cannot create a wait-for cycle.
+ *
+ * The house's true position is `SUM` across its shards; the `house_positions`
+ * view states that once so no caller has to know about the sharding.
+ */
+export const HOUSE_SHARDS = 16;
+
+/**
+ * `cashAccountId % HOUSE_SHARDS`, as two lowercase hex digits.
+ *
+ * Keyed on the account id rather than a hash of it: ids are sequential from an
+ * identity column, so the modulo distributes them perfectly evenly, and there is
+ * no hash to collide. (`hashtext()` would have been the wrong tool here for the
+ * same reason it is wrong for advisory locks — it returns int4.)
+ */
+export const houseShardOf = (cashAccountId: bigint): string =>
+  (cashAccountId % BigInt(HOUSE_SHARDS)).toString(16).padStart(2, '0');
+
+export const houseCashExternalId = (shard: string): string => `house:USD:${shard}`;
+export const houseAssetShardExternalId = (symbol: string, shard: string): string =>
+  `house:${symbol}:${shard}`;
+
+/**
+ * The pre-sharding house accounts. Retained, not removed: 10M seeded entries
+ * reference them and `entries` is append-only, so deleting them is not an option
+ * even in principle. New orders never touch them.
+ */
 export const HOUSE_CASH_EXTERNAL_ID = 'house:USD';
 export const houseAssetExternalId = (symbol: string): string => `house:${symbol}`;
 
@@ -98,6 +145,14 @@ async function resolve(
   pool: pg.Pool,
   request: PlaceOrderRequest,
 ): Promise<Resolved | { missing: 'account' | 'instrument' }> {
+  /**
+   * The house shard depends on `cash.id`, which this query is itself
+   * discovering — so the shard is computed in SQL from the joined row rather
+   * than in two round trips. `lpad(to_hex(cash.id % $3), 2, '0')` has to match
+   * `houseShardOf()` exactly; a test asserts they agree for a range of ids,
+   * because two implementations of one mapping is how a shard split silently
+   * appears.
+   */
   const { rows } = await pool.query<{
     cash_account_id: bigint | null;
     asset_account_id: bigint | null;
@@ -106,23 +161,25 @@ async function resolve(
     price: bigint | null;
     cash_balance: bigint | null;
   }>(
-    `SELECT cash.id        AS cash_account_id,
-            asset.id       AS asset_account_id,
-            hcash.id       AS house_cash_id,
-            hasset.id      AS house_asset_id,
+    `SELECT cash.id           AS cash_account_id,
+            asset.id          AS asset_account_id,
+            hcash.id          AS house_cash_id,
+            hasset.id         AS house_asset_id,
             i.reference_price AS price,
-            cash.balance   AS cash_balance
+            cash.balance      AS cash_balance
        FROM instruments i
-       LEFT JOIN accounts cash   ON cash.external_id   = $1
-       LEFT JOIN accounts asset  ON asset.external_id  = $2
-       LEFT JOIN accounts hcash  ON hcash.external_id  = $3
-       LEFT JOIN accounts hasset ON hasset.external_id = $4
-      WHERE i.symbol = $5`,
+       LEFT JOIN accounts cash  ON cash.external_id  = $1
+       LEFT JOIN accounts asset ON asset.external_id = $2
+       LEFT JOIN accounts hcash
+              ON hcash.external_id = 'house:USD:' || lpad(to_hex(cash.id % $3::bigint), 2, '0')
+       LEFT JOIN accounts hasset
+              ON hasset.external_id =
+                 'house:' || i.symbol || ':' || lpad(to_hex(cash.id % $3::bigint), 2, '0')
+      WHERE i.symbol = $4`,
     [
       request.cashAccountExternalId,
       positionExternalId(request.cashAccountExternalId, request.symbol),
-      HOUSE_CASH_EXTERNAL_ID,
-      houseAssetExternalId(request.symbol),
+      String(HOUSE_SHARDS),
       request.symbol,
     ],
   );

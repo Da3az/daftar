@@ -3,8 +3,10 @@ import { formatCash, parseCash, parseQuantity } from '@daftar/money';
 import { useTestDatabase } from './support/test-database.ts';
 import { Barrier } from './support/barrier.ts';
 import {
-  HOUSE_CASH_EXTERNAL_ID,
-  houseAssetExternalId,
+  HOUSE_SHARDS,
+  houseAssetShardExternalId,
+  houseCashExternalId,
+  houseShardOf,
   placeOrder,
   positionExternalId,
 } from '../src/orders/place.ts';
@@ -45,18 +47,35 @@ beforeEach(async () => {
   await ctx.pool.query(
     `INSERT INTO accounts (external_id, kind, asset_symbol, balance) VALUES
        ($1, 'customer_cash',   NULL,  $2::bigint),
-       ($3, 'customer_asset', 'BTC',  0),
-       ($4, 'house_cash',      NULL,  0),
-       ($5, 'house_asset',    'BTC',  0)`,
-    [
-      CUSTOMER,
-      OPENING.toString(),
-      positionExternalId(CUSTOMER, 'BTC'),
-      HOUSE_CASH_EXTERNAL_ID,
-      houseAssetExternalId('BTC'),
-    ],
+       ($3, 'customer_asset', 'BTC',  0)`,
+    [CUSTOMER, OPENING.toString(), positionExternalId(CUSTOMER, 'BTC')],
+  );
+
+  // All 16 house shards per unit, as migration 0006 creates them. Creating only
+  // the one shard this customer maps to would make the fixture depend on the id
+  // the identity column happened to hand out.
+  await ctx.pool.query(
+    `INSERT INTO accounts (external_id, kind, asset_symbol, balance)
+     SELECT 'house:USD:' || lpad(to_hex(n), 2, '0'), 'house_cash', NULL, 0
+       FROM generate_series(0, $1::int - 1) AS n`,
+    [HOUSE_SHARDS],
+  );
+  await ctx.pool.query(
+    `INSERT INTO accounts (external_id, kind, asset_symbol, balance)
+     SELECT 'house:' || $2 || ':' || lpad(to_hex(n), 2, '0'), 'house_asset', $2, 0
+       FROM generate_series(0, $1::int - 1) AS n`,
+    [HOUSE_SHARDS, 'BTC'],
   );
 });
+
+/** The house shard this test's customer maps to. */
+const customerShard = async (): Promise<string> => {
+  const { rows } = await ctx.pool.query<{ id: bigint }>(
+    'SELECT id FROM accounts WHERE external_id = $1',
+    [CUSTOMER],
+  );
+  return houseShardOf(rows[0]!.id);
+};
 
 const balanceOf = async (externalId: string): Promise<bigint> => {
   const { rows } = await ctx.pool.query<{ balance: bigint }>(
@@ -109,9 +128,10 @@ describe('placing an order', () => {
     if (result.status !== 'placed') throw new Error('expected placed');
 
     expect(await balanceOf(CUSTOMER)).toBe(OPENING - result.order.notional);
-    expect(await balanceOf(HOUSE_CASH_EXTERNAL_ID)).toBe(result.order.notional);
+    const shard = await customerShard();
+    expect(await balanceOf(houseCashExternalId(shard))).toBe(result.order.notional);
     expect(await balanceOf(positionExternalId(CUSTOMER, 'BTC'))).toBe(parseQuantity('0.5'));
-    expect(await balanceOf(houseAssetExternalId('BTC'))).toBe(-parseQuantity('0.5'));
+    expect(await balanceOf(houseAssetShardExternalId('BTC', shard))).toBe(-parseQuantity('0.5'));
   });
 
   it('a sell reverses both directions', async () => {
@@ -157,9 +177,15 @@ describe('placing an order', () => {
   it('rejects a quantity whose notional rounds to zero, before doing any work', async () => {
     // 1 satoshi of ARB at 0.87 is 0.0000000087 cash.
     await ctx.pool.query(
-      `INSERT INTO accounts (external_id, kind, asset_symbol) VALUES
-         ($1, 'customer_asset', 'ARB'), ($2, 'house_asset', 'ARB')`,
-      [positionExternalId(CUSTOMER, 'ARB'), houseAssetExternalId('ARB')],
+      // The enum casts are required: across a UNION ALL, PostgreSQL resolves the
+      // column type from the branches and infers `text` for a bare literal,
+      // which then will not assign to an account_kind column.
+      `INSERT INTO accounts (external_id, kind, asset_symbol)
+       SELECT $1, 'customer_asset'::account_kind, 'ARB'
+       UNION ALL
+       SELECT 'house:ARB:' || lpad(to_hex(n), 2, '0'), 'house_asset'::account_kind, 'ARB'
+         FROM generate_series(0, $2::int - 1) AS n`,
+      [positionExternalId(CUSTOMER, 'ARB'), HOUSE_SHARDS],
     );
 
     const result = await placeOrder(ctx.pool, {
@@ -219,6 +245,89 @@ describe('placing an order', () => {
         mode: 'serializable',
       }),
     ).rejects.toThrow(RangeError);
+  });
+});
+
+describe('house account sharding', () => {
+  /**
+   * The mapping exists twice: `houseShardOf()` in TypeScript, and
+   * `lpad(to_hex(cash.id % $n), 2, '0')` inside `resolve()`'s SQL. The SQL form
+   * is needed because the shard depends on `cash.id`, which that same query is
+   * discovering — doing it in TypeScript would cost a second round trip on the
+   * measured write path.
+   *
+   * Two implementations of one mapping is how a shard split appears silently:
+   * half the orders go to one shard and half to another, both transactions
+   * balance, every invariant holds, and the house's position is spread across a
+   * row nobody is looking at. So they are asserted to agree.
+   */
+  it('the TypeScript and SQL shard mappings agree', async () => {
+    const ids = [0n, 1n, 15n, 16n, 17n, 255n, 256n, 1000n, 123456789n, 9223372036854775807n];
+
+    const { rows } = await ctx.pool.query<{ id: bigint; shard: string }>(
+      `SELECT id, lpad(to_hex(id % $2::bigint), 2, '0') AS shard
+         FROM unnest($1::bigint[]) AS id`,
+      [ids.map((i) => i.toString()), String(HOUSE_SHARDS)],
+    );
+
+    expect(rows).toHaveLength(ids.length);
+    for (const row of rows) {
+      expect(houseShardOf(row.id), `id ${row.id.toString()}`).toBe(row.shard);
+    }
+  });
+
+  it('spreads customers across shards rather than onto one row', async () => {
+    // The whole point of the change. Create enough customers to cover every
+    // shard and check that they land on more than one.
+    const ids: string[] = [];
+    for (let i = 0; i < HOUSE_SHARDS * 3; i += 1) ids.push(`shardtest-${String(i)}`);
+
+    const { rows } = await ctx.pool.query<{ id: bigint }>(
+      `INSERT INTO accounts (external_id, kind, balance)
+       SELECT x, 'customer_cash', 0 FROM unnest($1::text[]) AS x
+       RETURNING id`,
+      [ids],
+    );
+
+    const shards = new Set(rows.map((r) => houseShardOf(r.id)));
+    // Sequential identity ids modulo 16 cover every shard exactly.
+    expect(shards.size).toBe(HOUSE_SHARDS);
+  });
+
+  it('the house position is the sum across shards, and the view says so', async () => {
+    await buy('shard-sum-1', '0.25');
+    await buy('shard-sum-2', '0.25');
+
+    const { rows } = await ctx.pool.query<{
+      unit: string;
+      shard_count: bigint;
+      stored_balance: bigint;
+    }>('SELECT unit, shard_count, stored_balance FROM house_positions ORDER BY unit');
+
+    const usd = rows.find((r) => r.unit === 'USD')!;
+    const btc = rows.find((r) => r.unit === 'BTC')!;
+
+    expect(usd.shard_count).toBe(BigInt(HOUSE_SHARDS));
+    // The house took in the cash and gave out the quantity.
+    expect(usd.stored_balance).toBeGreaterThan(0n);
+    expect(btc.stored_balance).toBe(-parseQuantity('0.5'));
+  });
+
+  it('a customer always maps to the same shard, preserving per-account order', async () => {
+    const before = await customerShard();
+    await buy('stable-1', '0.1');
+    await buy('stable-2', '0.1');
+    const after = await customerShard();
+
+    expect(after).toBe(before);
+
+    // Both orders' house legs landed on that one shard, not spread about.
+    const { rows } = await ctx.pool.query<{ n: bigint }>(
+      `SELECT count(DISTINCT a.external_id) AS n
+         FROM entries e JOIN accounts a ON a.id = e.account_id
+        WHERE a.kind IN ('house_cash', 'house_asset')`,
+    );
+    expect(rows[0]?.n).toBe(2n); // one USD shard + one BTC shard
   });
 });
 

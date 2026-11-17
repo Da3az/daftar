@@ -78,6 +78,21 @@ const schema = z.object({
   LEDGER_CONCURRENCY_MODE: z.enum(LEDGER_CONCURRENCY_MODES).default('serializable'),
 
   /**
+   * How many times the ledger write may be retried after a serialization
+   * failure or a deadlock.
+   *
+   * Configurable because it is the knob that defines `serializable`'s
+   * trade-off, and Phase 3 measures the trade rather than asserting it: a low
+   * bound sheds load fast and returns errors, a high bound converts those
+   * errors into latency. The benchmark runs both and publishes both.
+   *
+   * Bounded, always. An unbounded retry loop under sustained contention is an
+   * outage amplifier — every retry adds work to the system that caused the
+   * conflict.
+   */
+  LEDGER_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
+
+  /**
    * Phase 1 naive paths. Both default off. They are permanent deliverables, not
    * leftovers: a described failure is marketing, a runnable one is evidence.
    */

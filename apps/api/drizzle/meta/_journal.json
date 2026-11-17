@@ -43,6 +43,13 @@
       "when": 1794858630498,
       "tag": "0005_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794940000000,
+      "tag": "0006_house_account_shards",
+      "breakpoints": true
     }
   ]
 }

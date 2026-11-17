@@ -24,7 +24,9 @@
     "format:check": "prettier --check .",
     "test": "npm run --workspaces --if-present test",
     "openapi:dump": "npm run -w @daftar/api openapi:dump",
-    "postman:build": "node scripts/build-postman.mjs"
+    "postman:build": "node scripts/build-postman.mjs",
+    "seed": "npm run -w @daftar/api seed --",
+    "seed:verify": "npm run -w @daftar/api seed:verify"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
