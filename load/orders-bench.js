@@ -202,7 +202,7 @@ function textSummary(summary) {
   const m = summary.metrics || {};
   const lines = [''];
 
-  const count = (name) => (m[name]?.values.count ?? 0);
+  const count = (name) => m[name]?.values.count ?? 0;
   const ms = (n) => (n === undefined ? '-' : `${n.toFixed(1)}ms`);
 
   const durations = m.http_req_duration?.values ?? {};

@@ -159,7 +159,9 @@ try {
       `      covered by the checks above.\n`,
   );
 
-  process.stdout.write(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${String(failures)} CHECK(S) FAILED`}\n`);
+  process.stdout.write(
+    `\n${failures === 0 ? 'ALL CHECKS PASSED' : `${String(failures)} CHECK(S) FAILED`}\n`,
+  );
   process.exitCode = failures === 0 ? 0 : 1;
 } finally {
   await pool.end();

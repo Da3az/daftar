@@ -4,7 +4,11 @@ import { from as copyFrom } from 'pg-copy-streams';
 import type pg from 'pg';
 import { createPool } from '../db/pool.ts';
 import { env } from '../env.ts';
-import { HOUSE_CASH_EXTERNAL_ID, houseAssetExternalId, positionExternalId } from '../orders/place.ts';
+import {
+  HOUSE_CASH_EXTERNAL_ID,
+  houseAssetExternalId,
+  positionExternalId,
+} from '../orders/place.ts';
 
 /**
  * # The ~10M-entry seed
@@ -204,6 +208,24 @@ async function main(): Promise<void> {
     await client.query(`SET maintenance_work_mem = '512MB'`);
     await client.query(`SET synchronous_commit = off`);
 
+    /**
+     * Historical entries go to the UNSHARDED house account, deliberately.
+     *
+     * Migration 0006 shards the house side, and `placeOrder()` routes new orders
+     * to shards. The seed does not, for two reasons:
+     *
+     *  1. It reproduces the "before" state that Phase 3's first benchmark
+     *     measured, so that result stays reproducible from a clean clone. A seed
+     *     that pre-sharded would make the documented hot-row finding
+     *     unreachable.
+     *  2. These 10M rows are *history*. `entries` is append-only, so a real
+     *     system that introduced sharding would also have all its pre-existing
+     *     entries on the old account and could not migrate them. The seed
+     *     therefore models the realistic state: old entries on one row, new
+     *     writes spread across shards.
+     *
+     * The benchmark measures new writes, which are sharded.
+     */
     log('disabling write-path triggers for the bulk load');
     /**
      * Both have to go, for different reasons:

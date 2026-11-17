@@ -1,7 +1,7 @@
 {
   "item": [
     {
-      "id": "ed0d3d53-12a2-40e8-88ef-083b31fcae12",
+      "id": "34d16b73-ff16-4fcb-8395-4eb4231b71fc",
       "name": "health",
       "description": {
         "content": "Liveness and readiness",
@@ -9,7 +9,7 @@
       },
       "item": [
         {
-          "id": "c69b2713-8731-44a6-b589-dd0e7978ea5c",
+          "id": "d658636e-0f0b-4b2e-928a-9b61ec0de662",
           "name": "Liveness — the process is up. Touches nothing external.",
           "request": {
             "name": "Liveness — the process is up. Touches nothing external.",
@@ -55,7 +55,7 @@
           },
           "response": [
             {
-              "id": "4a0ef12b-8f57-423c-9708-6e246214b56c",
+              "id": "56ec51c0-7a55-4005-b289-709a8711e4fc",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -86,7 +86,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 6309.823294144743\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 3536.0759461606194\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -97,7 +97,7 @@
           }
         },
         {
-          "id": "da1da13c-5351-4e8e-b99f-278e2adf650a",
+          "id": "d613916d-df32-4390-b744-667c9b6cfa3f",
           "name": "Readiness — the database answers and int8 arrives as a bigint.",
           "request": {
             "name": "Readiness — the database answers and int8 arrives as a bigint.",
@@ -143,7 +143,7 @@
           },
           "response": [
             {
-              "id": "9e82fb9e-ded9-4c93-a95b-5f365de9e472",
+              "id": "0d461340-afd6-478d-a3f2-d7e62d4472af",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -174,12 +174,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "a9697173-3c67-413c-88d8-cccc8f915e07",
+              "id": "934c113f-bb66-4cc7-b932-bb62198d6cec",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -210,7 +210,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": false\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -224,7 +224,7 @@
       "event": []
     },
     {
-      "id": "3c934549-a5de-4d35-9c23-4dcc31cda09a",
+      "id": "8f9e88aa-dfbd-4c55-acdc-5eb514ad5b88",
       "name": "accounts",
       "description": {
         "content": "Accounts and balances",
@@ -232,7 +232,7 @@
       },
       "item": [
         {
-          "id": "4ec2b0cc-f68f-49a6-bd20-6a56bfcf2139",
+          "id": "02683b7e-9647-4ae2-8bc3-4ac2cfdd4249",
           "name": "Create an account.",
           "request": {
             "name": "Create an account.",
@@ -291,7 +291,7 @@
           },
           "response": [
             {
-              "id": "a6cfc685-086c-439c-af3b-575d792f2105",
+              "id": "c20c2f3b-9093-4d73-9468-ceff07b2fc93",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -330,12 +330,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "35e5dbda-931e-422e-aa21-1ebea27ad653",
+              "id": "9c43e210-ab8c-4387-9588-430807b9fe62",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -385,7 +385,7 @@
           }
         },
         {
-          "id": "72206555-ceac-4acd-bfed-6df2a2130cf3",
+          "id": "4561944f-b9ba-4e93-bacd-b6501728924a",
           "name": "Read an account and its stored balance.",
           "request": {
             "name": "Read an account and its stored balance.",
@@ -440,7 +440,7 @@
           },
           "response": [
             {
-              "id": "b344c6a4-4f06-43c8-bc39-ee367eccdadf",
+              "id": "4fbc3104-432d-4d04-8906-cbca45de0ede",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -480,12 +480,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "3c03d8c6-983f-46e1-8170-1009086be808",
+              "id": "50b6f4aa-18dd-4201-b098-59a355a89240",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -539,7 +539,7 @@
       "event": []
     },
     {
-      "id": "55319cd6-71b3-4640-a198-71755586aef6",
+      "id": "c8eb635a-e8d7-4110-8473-8fde88840bff",
       "name": "orders",
       "description": {
         "content": "Order placement — the measured write path",
@@ -547,7 +547,7 @@
       },
       "item": [
         {
-          "id": "add4e825-5b21-4d85-b38a-35d76f63f175",
+          "id": "61765afc-19c6-4332-9b4e-0eae92eb85a1",
           "name": "Place an order. The measured write path.",
           "request": {
             "name": "Place an order. The measured write path.",
@@ -609,7 +609,7 @@
           },
           "response": [
             {
-              "id": "bdf71304-9440-4379-8f5e-8aec8506a171",
+              "id": "6c523fbc-3f9c-414f-b52e-5ff773237b78",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -648,12 +648,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"rejected\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": 2966564864583335\n}",
+              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"settled\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": 6330815803659619\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "5ff1ffc1-52d8-40e2-97e5-55a8f6b72655",
+              "id": "28da4b23-49b5-4379-9661-7054ab62b5ed",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -697,7 +697,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "ed1e1fcc-e42d-4c6a-91bc-0e2892f599c0",
+              "id": "ce5482d6-40b0-4f4c-9adc-7478487d8e3a",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -741,7 +741,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "edc19a08-3812-4250-bbe0-aa40a3a8ae0d",
+              "id": "779baf01-a81e-44bc-bce8-c9b879c32c0f",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -791,7 +791,7 @@
           }
         },
         {
-          "id": "db081a79-3f67-4999-ba15-5389f96b04d8",
+          "id": "e7571b3e-f2e7-4e00-a26a-fa80d1ab1425",
           "name": "The fixed asset list and the reference prices orders are priced at.",
           "request": {
             "name": "The fixed asset list and the reference prices orders are priced at.",
@@ -837,7 +837,7 @@
           },
           "response": [
             {
-              "id": "847f4e1f-ced8-4e95-915e-54506fd6f473",
+              "id": "d67d4fbb-1dbd-4927-bc93-6d327dfb01e6",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -882,7 +882,7 @@
       "event": []
     },
     {
-      "id": "76d04e72-2713-45da-8559-bccd600de716",
+      "id": "2f545d9b-7c57-4744-af07-8b305729f4a6",
       "name": "ledger",
       "description": {
         "content": "Entries, transactions and statements",
@@ -890,7 +890,7 @@
       },
       "item": [
         {
-          "id": "9f662621-313d-4984-807e-79d8dcdaa2a5",
+          "id": "7adfe9c6-1122-476d-88ad-ab50fb6a40a7",
           "name": "Debit cash from an account.",
           "request": {
             "name": "Debit cash from an account.",
@@ -962,7 +962,7 @@
           },
           "response": [
             {
-              "id": "d7032e4f-3855-489e-8e7e-c9f9ec2d033b",
+              "id": "db9b8aa0-32a2-4a4b-8462-5846afd54a29",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1011,12 +1011,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"guarded_atomic\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "body": "{\n  \"status\": \"insufficient_funds\",\n  \"strategy\": \"naive_overdraft\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "71de9b41-09ea-4aac-b5a4-dafd916a03f1",
+              "id": "ad4cc541-6698-40c1-b7db-21ffcfd89a40",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1070,7 +1070,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "2848c2aa-c7a6-435b-ae15-cfd748718d79",
+              "id": "25eddf91-a961-4c88-a975-c8d8685fb813",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1119,7 +1119,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"applied\",\n  \"strategy\": \"guarded_atomic\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
+              "body": "{\n  \"status\": \"insufficient_funds\",\n  \"strategy\": \"naive_overdraft\",\n  \"balanceBefore\": \"1000.00\",\n  \"balanceAfter\": \"1000.00\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -1133,7 +1133,7 @@
       "event": []
     },
     {
-      "id": "c531cfe2-efba-4a47-83f6-7f2e54ebf8b4",
+      "id": "be87833c-0d03-4078-adf4-33612a8047b0",
       "name": "webhooks",
       "description": {
         "content": "Inbound provider events",
@@ -1143,7 +1143,7 @@
       "event": []
     },
     {
-      "id": "7903c0d7-9e98-4cc0-8a6a-328786a17af0",
+      "id": "6170b946-bdcb-4a3c-8eb8-3952a1ba5584",
       "name": "chaos",
       "description": {
         "content": "Server-side concurrency bursts for the demo",
@@ -1162,7 +1162,7 @@
     }
   ],
   "info": {
-    "_postman_id": "f173d5a1-3769-4721-bd25-43fc4fbfcb83",
+    "_postman_id": "c065e943-d832-4425-bab0-7a9b9adddb0b",
     "name": "Daftar API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {
