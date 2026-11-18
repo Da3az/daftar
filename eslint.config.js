@@ -58,7 +58,13 @@ export default tseslint.config(
   // awaits anything. The registration itself is awaited by the caller, so
   // require-await here flags the framework's shape, not a mistake.
   {
-    files: ['apps/api/src/plugins/**/*.ts', 'apps/api/src/routes/**/*.ts'],
+    files: [
+      'apps/api/src/plugins/**/*.ts',
+      'apps/api/src/routes/**/*.ts',
+      // Fastify plugins are not confined to one directory — the raw-body parser
+      // lives next to the webhook code it exists for.
+      'apps/api/src/webhooks/**/*.ts',
+    ],
     rules: { '@typescript-eslint/require-await': 'off' },
   },
 

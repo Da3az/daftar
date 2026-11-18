@@ -18,6 +18,44 @@ import { env } from './env.ts';
 function replaceBigInts(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();
   if (Array.isArray(value)) return value.map(replaceBigInts);
+
+  /**
+   * **Errors are handled explicitly, and this is not a nicety.**
+   *
+   * The first version of this function fell through to the generic object
+   * branch below for everything non-primitive. `Object.entries(new Error('x'))`
+   * is `[]` — `message` and `stack` are non-enumerable own properties — so
+   * every error this logger touched was rebuilt as `{}`.
+   *
+   * The result was `{"level":"error","err":{},"msg":"unhandled error"}` for
+   * every unhandled exception in the service. Found while debugging an
+   * unrelated 500: the log said an error had happened and nothing whatsoever
+   * about what it was. A logging layer that silently discards error detail is
+   * worse than no logging, because it is trusted.
+   *
+   * Compounding it, `serializers: {}` below replaced pino's default `err`
+   * serializer, so nothing else was going to rescue the Error either.
+   */
+  if (value instanceof Error) {
+    const serialised: Record<string, unknown> = {
+      type: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+
+    // Own enumerable properties carry the detail that matters most here: pg
+    // puts `code` (the SQLSTATE), `constraint`, `detail` and `table` on its
+    // errors, and losing those would make a constraint violation unreadable.
+    for (const [k, v] of Object.entries(value)) {
+      if (k in serialised) continue;
+      serialised[k] = replaceBigInts(v);
+    }
+
+    if (value.cause !== undefined) serialised['cause'] = replaceBigInts(value.cause);
+
+    return serialised;
+  }
+
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -25,6 +63,7 @@ function replaceBigInts(value: unknown): unknown {
     }
     return out;
   }
+
   return value;
 }
 
@@ -63,11 +102,15 @@ const base: LoggerOptions = {
   },
 
   /**
-   * Off: the one canonical line per request carries everything, and pino's
-   * per-request child-logger lines would double the volume while splitting the
-   * story of a single request across two records.
+   * `err` is serialised by `replaceBigInts` above, which handles Error
+   * explicitly. Nothing is overridden here.
+   *
+   * It previously read `serializers: {}`, intending "no per-request child
+   * serializers". That also removed pino's default `err` serializer, which was
+   * half of why errors logged as `{}`. The volume concern it was aimed at is
+   * handled by `logController.disableRequestLogging` in app.ts, which is the
+   * right place for it.
    */
-  serializers: {},
 };
 
 export function createLogger(): Logger {

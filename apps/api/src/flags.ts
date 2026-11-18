@@ -23,6 +23,7 @@ export const FLAG_HEADERS = {
   concurrencyMode: 'x-daftar-concurrency-mode',
   naiveOverdraft: 'x-daftar-naive-overdraft',
   naiveLostUpdate: 'x-daftar-naive-lost-update',
+  naiveIdempotency: 'x-daftar-naive-idempotency',
 } as const;
 
 export interface RequestFlags {
@@ -32,12 +33,15 @@ export interface RequestFlags {
   naiveOverdraft: boolean;
   /** Phase 1: read balance, compute in JS, write an absolute value. */
   naiveLostUpdate: boolean;
+  /** Phase 4: lookup-then-insert on the idempotency key, instead of ON CONFLICT. */
+  naiveIdempotency: boolean;
 }
 
 export const defaultFlags = (): RequestFlags => ({
   concurrencyMode: env.LEDGER_CONCURRENCY_MODE,
   naiveOverdraft: env.DAFTAR_NAIVE_OVERDRAFT,
   naiveLostUpdate: env.DAFTAR_NAIVE_LOST_UPDATE,
+  naiveIdempotency: env.DAFTAR_NAIVE_IDEMPOTENCY,
 });
 
 const headerBool = z
@@ -106,6 +110,7 @@ export function resolveFlags(headers: Headers): RequestFlags {
   for (const [key, header] of [
     ['naiveOverdraft', FLAG_HEADERS.naiveOverdraft],
     ['naiveLostUpdate', FLAG_HEADERS.naiveLostUpdate],
+    ['naiveIdempotency', FLAG_HEADERS.naiveIdempotency],
   ] as const) {
     const raw = single(headers, header);
     if (raw === undefined) continue;
@@ -125,6 +130,7 @@ export function describeFlags(flags: RequestFlags): string {
   const naive = [
     flags.naiveOverdraft ? 'naive_overdraft' : null,
     flags.naiveLostUpdate ? 'naive_lost_update' : null,
+    flags.naiveIdempotency ? 'naive_idempotency' : null,
   ].filter((v): v is string => v !== null);
 
   return naive.length === 0 ? flags.concurrencyMode : `${flags.concurrencyMode}+${naive.join('+')}`;

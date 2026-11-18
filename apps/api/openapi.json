@@ -649,7 +649,101 @@
             }
           }
         },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup."
+          }
+        ],
         "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "externalId": {
+                      "type": "string"
+                    },
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "side": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell"
+                      ]
+                    },
+                    "quantity": {
+                      "type": "string",
+                      "description": "Exact decimal string, 8 fractional digits."
+                    },
+                    "price": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "The price frozen into this order. Never re-read.",
+                      "example": "1000.00"
+                    },
+                    "notional": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "settled",
+                        "rejected"
+                      ]
+                    },
+                    "transactionId": {
+                      "type": "string",
+                      "description": "Ledger transaction id, as a decimal string."
+                    },
+                    "cashBalanceAfter": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "assetBalanceAfter": {
+                      "type": "string"
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "externalId",
+                    "symbol",
+                    "side",
+                    "quantity",
+                    "price",
+                    "notional",
+                    "status",
+                    "transactionId",
+                    "cashBalanceAfter",
+                    "assetBalanceAfter",
+                    "attempts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -879,6 +973,254 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{provider}": {
+      "post": {
+        "summary": "Inbound provider event. HMAC-SHA256 over the raw body.",
+        "tags": [
+          "webhooks"
+        ],
+        "description": "**Signature.** `x-daftar-signature: t=<unix>,v1=<hex>` where the\nHMAC-SHA256 is computed over `\"{t}.{raw body}\"` with the shared secret.\nModelled on Stripe's scheme. Several `v1=` values are accepted so a\nsecret rotation needs no downtime.\n\nThe signature covers the **raw bytes**. Verifying against a\nre-serialised body cannot work: a JSON round trip changes number\nformatting, whitespace, unicode escaping, duplicate keys and\ninteger-like key order — and corrupts large integers outright.\n\n**Replay window.** +/-300s on the signed timestamp. A correctly signed\nbut stale payload is recorded as a replay, not a forgery; the two are\nreported separately because they need different responses.\n\n**Idempotency.** `UNIQUE (provider, idempotency_key)` arbitrates. A\nreplay arriving while the first delivery is still processing gets\n**409**, not 200 — answering 200 for work that has not finished is the\nbug this endpoint exists to avoid. The payload hash is stored, so the\nsame key with a different body is detected and reported rather than\nsilently accepted.\n\nGenerate signed payloads with `node scripts/sign-webhook.mjs`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "simbank"
+              ]
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "deliveryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "transactionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "eventId",
+                    "state",
+                    "duplicate",
+                    "deliveryCount",
+                    "transactionId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "deliveryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "transactionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "eventId",
+                    "state",
+                    "duplicate",
+                    "deliveryCount",
+                    "transactionId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
                 }
               }
             }

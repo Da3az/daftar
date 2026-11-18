@@ -100,7 +100,12 @@ describe('resolveFlags', () => {
 describe('describeFlags', () => {
   it('names the strategy alone when nothing is naive', () => {
     expect(
-      describeFlags({ concurrencyMode: 'advisory', naiveOverdraft: false, naiveLostUpdate: false }),
+      describeFlags({
+        concurrencyMode: 'advisory',
+        naiveOverdraft: false,
+        naiveLostUpdate: false,
+        naiveIdempotency: false,
+      }),
     ).toBe('advisory');
   });
 
@@ -110,6 +115,7 @@ describe('describeFlags', () => {
         concurrencyMode: 'pessimistic',
         naiveOverdraft: true,
         naiveLostUpdate: false,
+        naiveIdempotency: false,
       }),
     ).toBe('pessimistic+naive_overdraft');
 
@@ -118,6 +124,7 @@ describe('describeFlags', () => {
         concurrencyMode: 'pessimistic',
         naiveOverdraft: true,
         naiveLostUpdate: true,
+        naiveIdempotency: false,
       }),
     ).toBe('pessimistic+naive_overdraft+naive_lost_update');
   });

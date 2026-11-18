@@ -5,6 +5,7 @@ import { timed } from '../plugins/request-context.ts';
 import { CashAmountOut, ExternalId, PositiveQuantity } from '../contracts/money.ts';
 import { placeOrder } from '../orders/place.ts';
 import { UNIQUE_VIOLATION, sqlstateOf } from '../ledger/sqlstate.ts';
+import { claim, hashRequest, settle } from '../idempotency/keys.ts';
 
 const PlaceOrderBody = z.object({
   externalId: ExternalId.describe('Caller-supplied unique id for this order.'),
@@ -60,8 +61,20 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
         'took, which is non-trivial only under `serializable`.',
       ].join('\n'),
       body: PlaceOrderBody,
+      headers: z.object({
+        'idempotency-key': z
+          .string()
+          .min(8)
+          .max(255)
+          .optional()
+          .describe(
+            'Optional. A repeat of the same key returns the original response verbatim ' +
+              'rather than placing a second order. Enforced by a UNIQUE index, not a lookup.',
+          ),
+      }),
       response: {
         201: OrderOut,
+        200: OrderOut,
         404: ErrorOut,
         409: ErrorOut,
         422: ErrorOut,
@@ -69,6 +82,68 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     handler: async (request, reply) => {
       const body = request.body;
+      const idempotencyKey = request.headers['idempotency-key'];
+
+      /**
+       * Claim the key BEFORE doing any work.
+       *
+       * One `INSERT ... ON CONFLICT DO NOTHING RETURNING id` decides who owns
+       * this request. The naive alternative — SELECT, then work, then INSERT —
+       * is Phase 1's lost-update race wearing different clothes: two concurrent
+       * retries both find nothing, both place an order, and the customer is
+       * charged twice. No isolation level prevents it, because nothing in the
+       * database knows the two requests are related until after both have
+       * already done the work.
+       */
+      let claimedKeyId: bigint | undefined;
+
+      if (idempotencyKey !== undefined) {
+        const outcome = await timed(request, () =>
+          claim(app.pool, {
+            route: 'POST /v1/orders',
+            key: idempotencyKey,
+            requestHash: hashRequest(body),
+            naive: request.ctx.flags.naiveIdempotency,
+          }),
+        );
+
+        switch (outcome.status) {
+          case 'replay': {
+            /**
+             * The original response, verbatim.
+             *
+             * 200 rather than the recorded 201: the resource was created by the
+             * *first* request, not this one, and a 201 here would tell the client
+             * it had just created something. The recorded body is byte-identical
+             * either way, which is the property that matters.
+             */
+            reply.status(200);
+            return outcome.responseBody as never;
+          }
+
+          case 'in_progress':
+            // 409, not 200. The first request may still fail, so reporting
+            // success would be a lie the client acts on.
+            reply.status(409);
+            return {
+              error: 'request_in_progress',
+              message: 'a request with this Idempotency-Key is still being processed',
+            };
+
+          case 'mismatch':
+            reply.status(422);
+            return {
+              error: 'idempotency_key_reused',
+              message:
+                'this Idempotency-Key was used with a different request body; ' +
+                'replaying an unrelated response would hide the bug',
+            };
+
+          case 'claimed':
+            claimedKeyId = outcome.id;
+            break;
+        }
+      }
 
       try {
         const result = await timed(request, () =>
@@ -89,8 +164,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
         switch (result.status) {
           case 'placed': {
             const o = result.order;
-            reply.status(201);
-            return {
+            const payload = {
               externalId: o.externalId,
               symbol: o.symbol,
               side: o.side,
@@ -103,6 +177,24 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
               assetBalanceAfter: formatQuantity(o.assetBalanceAfter),
               attempts: result.attempts,
             };
+
+            if (claimedKeyId !== undefined && idempotencyKey !== undefined) {
+              await settle(app.pool, claimedKeyId, {
+                state: 'completed',
+                responseStatus: 201,
+                responseBody: payload,
+                // The naive path has no row yet; settle inserts it, after the
+                // work. That ordering IS the bug it demonstrates.
+                naiveKey: {
+                  route: 'POST /v1/orders',
+                  key: idempotencyKey,
+                  requestHash: hashRequest(body),
+                },
+              });
+            }
+
+            reply.status(201);
+            return payload;
           }
 
           case 'insufficient_funds':

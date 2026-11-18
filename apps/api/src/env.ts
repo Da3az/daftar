@@ -100,12 +100,32 @@ const schema = z.object({
   DAFTAR_NAIVE_LOST_UPDATE: boolish.default(false),
 
   /**
+   * Phase 4's naive path: lookup-then-insert on the idempotency key instead of
+   * letting the UNIQUE index arbitrate. Produces duplicate orders from
+   * concurrent retries. A permanent deliverable, like the other two.
+   */
+  DAFTAR_NAIVE_IDEMPOTENCY: boolish.default(false),
+
+  /**
    * Whether request headers are allowed to override the flags above. On in
    * development and test; must be switched on explicitly anywhere else, because
    * an unauthenticated header that selects a deliberately-broken ledger path is
    * exactly the kind of thing that should not be reachable by default.
    */
   ALLOW_FLAG_HEADERS: boolish.optional(),
+
+  /**
+   * Shared secret for inbound webhook signatures.
+   *
+   * No default outside development: a hardcoded fallback secret is the same
+   * thing as no signature check at all, since anyone reading this repo would
+   * know it. Required in production, so a deploy that forgets it fails at boot
+   * rather than accepting unsigned events.
+   */
+  WEBHOOK_SIGNING_SECRET: z.string().min(16).optional(),
+
+  /** Replay tolerance in seconds, each way. 300 is Stripe's documented default. */
+  WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(1).max(86_400).default(300),
 
   /**
    * Global per-IP request ceiling.
@@ -142,7 +162,10 @@ type RawEnv = z.infer<typeof schema>;
  * so the exported type makes it required. Consumers never have to handle an
  * `undefined` that cannot actually occur.
  */
-export type Env = Omit<RawEnv, 'ALLOW_FLAG_HEADERS'> & { ALLOW_FLAG_HEADERS: boolean };
+export type Env = Omit<RawEnv, 'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET'> & {
+  ALLOW_FLAG_HEADERS: boolean;
+  WEBHOOK_SIGNING_SECRET: string;
+};
 
 function load(source: NodeJS.ProcessEnv): Env {
   const parsed = schema.safeParse(source);
@@ -159,12 +182,27 @@ function load(source: NodeJS.ProcessEnv): Env {
 
   const env = parsed.data;
 
+  /**
+   * The webhook secret is required in production and defaulted elsewhere.
+   *
+   * Defaulted rather than optional so the signature code has no "if there is no
+   * secret" branch — a branch that, once it exists, is one bad deploy away from
+   * accepting every unsigned request. The development value is deliberately
+   * named so it cannot be mistaken for a real one.
+   */
+  if (env.NODE_ENV === 'production' && env.WEBHOOK_SIGNING_SECRET === undefined) {
+    process.stderr.write('\nWEBHOOK_SIGNING_SECRET is required when NODE_ENV=production.\n\n');
+    process.exit(78);
+  }
+
   // Defaulting one field from another cannot be expressed inside the schema
   // without making the field's type optional at every use site, so it happens
   // here, once, where both values are known.
   return {
     ...env,
     ALLOW_FLAG_HEADERS: env.ALLOW_FLAG_HEADERS ?? env.NODE_ENV !== 'production',
+    WEBHOOK_SIGNING_SECRET:
+      env.WEBHOOK_SIGNING_SECRET ?? 'whsec_development_only_not_a_real_secret',
   };
 }
 

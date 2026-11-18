@@ -1,7 +1,7 @@
 {
   "item": [
     {
-      "id": "34d16b73-ff16-4fcb-8395-4eb4231b71fc",
+      "id": "3d13f372-ac2c-489a-8c16-9368a65b2575",
       "name": "health",
       "description": {
         "content": "Liveness and readiness",
@@ -9,7 +9,7 @@
       },
       "item": [
         {
-          "id": "d658636e-0f0b-4b2e-928a-9b61ec0de662",
+          "id": "9a9a0e50-33b1-4a57-af99-b766f97ce7ba",
           "name": "Liveness — the process is up. Touches nothing external.",
           "request": {
             "name": "Liveness — the process is up. Touches nothing external.",
@@ -55,7 +55,7 @@
           },
           "response": [
             {
-              "id": "56ec51c0-7a55-4005-b289-709a8711e4fc",
+              "id": "d90fd898-8c6e-49bc-befa-4d0b046bc1a8",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -86,7 +86,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 3536.0759461606194\n}",
+              "body": "{\n  \"status\": \"ok\",\n  \"uptimeSeconds\": 1755.4412959129163\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -97,7 +97,7 @@
           }
         },
         {
-          "id": "d613916d-df32-4390-b744-667c9b6cfa3f",
+          "id": "8729abd1-903a-45ff-8b67-2aa22cb46488",
           "name": "Readiness — the database answers and int8 arrives as a bigint.",
           "request": {
             "name": "Readiness — the database answers and int8 arrives as a bigint.",
@@ -143,7 +143,7 @@
           },
           "response": [
             {
-              "id": "0d461340-afd6-478d-a3f2-d7e62d4472af",
+              "id": "9816d8cf-d51b-47e2-884b-c3c9b835c434",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -174,12 +174,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "934c113f-bb66-4cc7-b932-bb62198d6cec",
+              "id": "dda031c5-e394-47bb-9604-3e9b9ff3bb30",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -210,7 +210,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": true,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
+              "body": "{\n  \"status\": \"degraded\",\n  \"checks\": {\n    \"database\": false,\n    \"bigintTypeParser\": true\n  },\n  \"int8Probe\": {\n    \"value\": \"string\",\n    \"runtimeType\": \"string\"\n  }\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -224,7 +224,7 @@
       "event": []
     },
     {
-      "id": "8f9e88aa-dfbd-4c55-acdc-5eb514ad5b88",
+      "id": "6dcd5039-55a4-4cd9-916e-4482d87608e6",
       "name": "accounts",
       "description": {
         "content": "Accounts and balances",
@@ -232,7 +232,7 @@
       },
       "item": [
         {
-          "id": "02683b7e-9647-4ae2-8bc3-4ac2cfdd4249",
+          "id": "da9801b2-7567-4837-af68-84697e803be7",
           "name": "Create an account.",
           "request": {
             "name": "Create an account.",
@@ -281,7 +281,7 @@
             "auth": null,
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -291,7 +291,7 @@
           },
           "response": [
             {
-              "id": "c20c2f3b-9093-4d73-9468-ceff07b2fc93",
+              "id": "92ee8b8b-bfe0-4f11-b077-0f66143e0927",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -314,7 +314,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -330,12 +330,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"customer_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "9c43e210-ab8c-4387-9588-430807b9fe62",
+              "id": "21055bf3-af09-482f-bc30-38ee36942630",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -358,7 +358,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_cash\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"external_funding\",\n  \"assetSymbol\": \"string\",\n  \"openingBalance\": \"100.00\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -385,7 +385,7 @@
           }
         },
         {
-          "id": "4561944f-b9ba-4e93-bacd-b6501728924a",
+          "id": "ea565f44-74cc-4850-b253-ccb67cb2c8b5",
           "name": "Read an account and its stored balance.",
           "request": {
             "name": "Read an account and its stored balance.",
@@ -440,7 +440,7 @@
           },
           "response": [
             {
-              "id": "4fbc3104-432d-4d04-8906-cbca45de0ede",
+              "id": "281d6d36-d84d-4ecb-871b-8ac11529e5c2",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -480,12 +480,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"house_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
+              "body": "{\n  \"externalId\": \"cash-0001\",\n  \"kind\": \"customer_asset\",\n  \"assetSymbol\": \"string\",\n  \"balance\": \"1000.00\",\n  \"createdAt\": \"string\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "50b6f4aa-18dd-4201-b098-59a355a89240",
+              "id": "8c0c280b-07c8-491e-98e0-4d921d771a56",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -539,7 +539,7 @@
       "event": []
     },
     {
-      "id": "c8eb635a-e8d7-4110-8473-8fde88840bff",
+      "id": "66367a95-f06d-4773-bb0c-9b074bae6fa7",
       "name": "orders",
       "description": {
         "content": "Order placement — the measured write path",
@@ -547,7 +547,7 @@
       },
       "item": [
         {
-          "id": "61765afc-19c6-4332-9b4e-0eae92eb85a1",
+          "id": "9664ccac-39f1-4d29-996f-9bb2d6041bf9",
           "name": "Place an order. The measured write path.",
           "request": {
             "name": "Place an order. The measured write path.",
@@ -568,6 +568,12 @@
               "variable": []
             },
             "header": [
+              {
+                "disabled": true,
+                "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                "key": "idempotency-key",
+                "value": "stringstring"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -599,7 +605,7 @@
             "auth": null,
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+              "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -609,7 +615,7 @@
           },
           "response": [
             {
-              "id": "6c523fbc-3f9c-414f-b52e-5ff773237b78",
+              "id": "4baa822d-aa83-4f85-8fbf-742e9029d863",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -625,6 +631,12 @@
                 },
                 "header": [
                   {
+                    "disabled": true,
+                    "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                    "key": "idempotency-key",
+                    "value": "stringstring"
+                  },
+                  {
                     "key": "Accept",
                     "value": "application/json"
                   }
@@ -632,7 +644,57 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"pending\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": -2462811046386356\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "795e8d7e-add0-41d7-a20d-15227316cf1a",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "orders"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": true,
+                    "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                    "key": "idempotency-key",
+                    "value": "stringstring"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -648,12 +710,12 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"settled\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": 6330815803659619\n}",
+              "body": "{\n  \"externalId\": \"string\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"string\",\n  \"price\": \"1000.00\",\n  \"notional\": \"1000.00\",\n  \"status\": \"pending\",\n  \"transactionId\": \"string\",\n  \"cashBalanceAfter\": \"1000.00\",\n  \"assetBalanceAfter\": \"string\",\n  \"attempts\": -2462811046386356\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "28da4b23-49b5-4379-9661-7054ab62b5ed",
+              "id": "922498b2-3f0f-42fa-90a7-3f6bdeb9f9e1",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -669,6 +731,12 @@
                 },
                 "header": [
                   {
+                    "disabled": true,
+                    "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                    "key": "idempotency-key",
+                    "value": "stringstring"
+                  },
+                  {
                     "key": "Accept",
                     "value": "application/json"
                   }
@@ -676,7 +744,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -697,7 +765,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "ce5482d6-40b0-4f4c-9adc-7478487d8e3a",
+              "id": "983dae09-e54f-4938-84f8-2d60a1e03fa5",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -713,6 +781,12 @@
                 },
                 "header": [
                   {
+                    "disabled": true,
+                    "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                    "key": "idempotency-key",
+                    "value": "stringstring"
+                  },
+                  {
                     "key": "Accept",
                     "value": "application/json"
                   }
@@ -720,7 +794,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -741,7 +815,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "779baf01-a81e-44bc-bce8-c9b879c32c0f",
+              "id": "36395f97-23c5-4b53-8904-74c1345e4381",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -757,6 +831,12 @@
                 },
                 "header": [
                   {
+                    "disabled": true,
+                    "description": "Optional. A repeat of the same key returns the original response verbatim rather than placing a second order. Enforced by a UNIQUE index, not a lookup.",
+                    "key": "idempotency-key",
+                    "value": "stringstring"
+                  },
+                  {
                     "key": "Accept",
                     "value": "application/json"
                   }
@@ -764,7 +844,7 @@
                 "method": "POST",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"sell\",\n  \"quantity\": \"0.50000000\"\n}",
+                  "raw": "{\n  \"externalId\": \"cash-0001\",\n  \"accountId\": \"cash-0001\",\n  \"symbol\": \"string\",\n  \"side\": \"buy\",\n  \"quantity\": \"0.50000000\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -791,7 +871,7 @@
           }
         },
         {
-          "id": "e7571b3e-f2e7-4e00-a26a-fa80d1ab1425",
+          "id": "b90884fe-4279-44ae-be68-06561d7f94ab",
           "name": "The fixed asset list and the reference prices orders are priced at.",
           "request": {
             "name": "The fixed asset list and the reference prices orders are priced at.",
@@ -837,7 +917,7 @@
           },
           "response": [
             {
-              "id": "d67d4fbb-1dbd-4927-bc93-6d327dfb01e6",
+              "id": "eec15073-bfa9-4c20-bbcf-ef4ec00c24bc",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -882,7 +962,7 @@
       "event": []
     },
     {
-      "id": "2f545d9b-7c57-4744-af07-8b305729f4a6",
+      "id": "54746168-a758-4803-af53-7ad2ba02157c",
       "name": "ledger",
       "description": {
         "content": "Entries, transactions and statements",
@@ -890,7 +970,7 @@
       },
       "item": [
         {
-          "id": "7adfe9c6-1122-476d-88ad-ab50fb6a40a7",
+          "id": "17238abf-7ef7-47d4-9c1a-75ac20473bce",
           "name": "Debit cash from an account.",
           "request": {
             "name": "Debit cash from an account.",
@@ -962,7 +1042,7 @@
           },
           "response": [
             {
-              "id": "db9b8aa0-32a2-4a4b-8462-5846afd54a29",
+              "id": "9c256ac0-9df0-4ee7-b0d5-1104c757900d",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1016,7 +1096,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "ad4cc541-6698-40c1-b7db-21ffcfd89a40",
+              "id": "45e0c9f9-dad5-4dfe-848c-8d15dcc8af2b",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1070,7 +1150,7 @@
               "_postman_previewlanguage": "json"
             },
             {
-              "id": "25eddf91-a961-4c88-a975-c8d8685fb813",
+              "id": "55b87b9b-349a-41d5-bb22-079e4365ef20",
               "name": "Default Response",
               "originalRequest": {
                 "url": {
@@ -1133,17 +1213,352 @@
       "event": []
     },
     {
-      "id": "be87833c-0d03-4078-adf4-33612a8047b0",
+      "id": "05b6633c-0fe0-4847-9136-bddf857b71da",
       "name": "webhooks",
       "description": {
         "content": "Inbound provider events",
         "type": "text/plain"
       },
-      "item": [],
+      "item": [
+        {
+          "id": "55644639-68b1-4993-9d55-7b9db5514e4c",
+          "name": "Inbound provider event. HMAC-SHA256 over the raw body.",
+          "request": {
+            "name": "Inbound provider event. HMAC-SHA256 over the raw body.",
+            "description": {
+              "content": "**Signature.** `x-daftar-signature: t=<unix>,v1=<hex>` where the\nHMAC-SHA256 is computed over `\"{t}.{raw body}\"` with the shared secret.\nModelled on Stripe's scheme. Several `v1=` values are accepted so a\nsecret rotation needs no downtime.\n\nThe signature covers the **raw bytes**. Verifying against a\nre-serialised body cannot work: a JSON round trip changes number\nformatting, whitespace, unicode escaping, duplicate keys and\ninteger-like key order — and corrupts large integers outright.\n\n**Replay window.** +/-300s on the signed timestamp. A correctly signed\nbut stale payload is recorded as a replay, not a forgery; the two are\nreported separately because they need different responses.\n\n**Idempotency.** `UNIQUE (provider, idempotency_key)` arbitrates. A\nreplay arriving while the first delivery is still processing gets\n**409**, not 200 — answering 200 for work that has not finished is the\nbug this endpoint exists to avoid. The payload hash is stored, so the\nsame key with a different body is detected and reported rather than\nsilently accepted.\n\nGenerate signed payloads with `node scripts/sign-webhook.mjs`.",
+              "type": "text/plain"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/webhooks/:provider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks",
+                ":provider"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "simbank",
+                  "key": "provider",
+                  "description": "(Required) "
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-daftar-concurrency-mode",
+                "value": "serializable",
+                "disabled": true,
+                "description": "pessimistic | serializable | advisory"
+              },
+              {
+                "key": "x-daftar-naive-overdraft",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: app-level funds check then atomic decrement. Overdrafts."
+              },
+              {
+                "key": "x-daftar-naive-lost-update",
+                "value": "true",
+                "disabled": true,
+                "description": "Phase 1 naive path: read, compute in JS, write absolute. Loses updates."
+              }
+            ],
+            "method": "POST",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "d5c8cead-fb4e-4e10-aa6a-596a7e764bd6",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": true,\n  \"eventId\": \"string\",\n  \"state\": \"ignored\",\n  \"duplicate\": false,\n  \"deliveryCount\": -3108690167437390,\n  \"transactionId\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "062f67a1-ae3e-419b-b595-5cdf2ecd7f0e",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "Accepted",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": true,\n  \"eventId\": \"string\",\n  \"state\": \"ignored\",\n  \"duplicate\": false,\n  \"deliveryCount\": -3108690167437390,\n  \"transactionId\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "2012be9b-09aa-4683-9608-390b72cecbc2",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": false,\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "5ca2ef69-b591-400d-ad0d-d0da9abb50d5",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": false,\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "1594ca8b-f64b-4452-9000-5c950fa85e70",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "Conflict",
+              "code": 409,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": false,\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "20d69336-067f-46bc-abd6-28f9edc2d838",
+              "name": "Default Response",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "v1",
+                    "webhooks",
+                    ":provider"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "simbank",
+                      "key": "provider",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {}
+              },
+              "status": "Unprocessable Entity (WebDAV) (RFC 4918)",
+              "code": 422,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"received\": false,\n  \"error\": \"string\",\n  \"message\": \"string\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
       "event": []
     },
     {
-      "id": "6170b946-bdcb-4a3c-8eb8-3952a1ba5584",
+      "id": "6e8328ec-77a8-4cb9-bebe-52502c01c5e5",
       "name": "chaos",
       "description": {
         "content": "Server-side concurrency bursts for the demo",
@@ -1162,7 +1577,7 @@
     }
   ],
   "info": {
-    "_postman_id": "c065e943-d832-4425-bab0-7a9b9adddb0b",
+    "_postman_id": "71420a1c-134c-4eca-8245-beade1dfb865",
     "name": "Daftar API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": {

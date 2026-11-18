@@ -23,6 +23,7 @@ import { createDatabase, type Database } from './db/pool.ts';
 import { healthRoutes } from './routes/health.ts';
 import { accountRoutes } from './routes/accounts.ts';
 import { orderRoutes } from './routes/orders.ts';
+import { webhookRoutes } from './routes/webhooks.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
 declare module 'fastify' {
@@ -248,6 +249,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   await app.register(healthRoutes);
   await app.register(accountRoutes);
   await app.register(orderRoutes);
+  await app.register(webhookRoutes);
 
   return app;
 }

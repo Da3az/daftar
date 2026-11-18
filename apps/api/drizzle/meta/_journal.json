@@ -50,6 +50,20 @@
       "when": 1794940000000,
       "tag": "0006_house_account_shards",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794960000000,
+      "tag": "0007_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794965000000,
+      "tag": "0008_payload_conflict_counter",
+      "breakpoints": true
     }
   ]
 }
