@@ -1,0 +1,61 @@
+# Everything the image does not need, and some things it must not have.
+#
+# `node_modules` first and foremost: copying a host install into the build
+# context ships the host's platform-specific binaries (esbuild, @swc) into an
+# image that may not share its architecture, and silently shadows the `npm ci`
+# the Dockerfile runs.
+
+node_modules
+**/node_modules
+
+# Build output — regenerated inside the image. Copying a host `dist` in would
+# make the image's contents depend on whatever was last built locally.
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Secrets. `.env` must never enter a build context: every file in the context is
+# visible to every build stage and lands in the image's layer history even if a
+# later stage deletes it.
+.env
+.env.*
+!.env.example
+
+# Tests and tooling — not shipped, and they pull in dev dependencies.
+**/*.test.ts
+**/test
+**/vitest.config.ts
+eslint.config.js
+.prettierrc.json
+.prettierignore
+
+# The frontend. The API image serves no static files; the SPA is built
+# separately and served from the edge.
+#
+# Its **manifest** is re-included and must stay that way: `npm ci` validates the
+# lockfile against every workspace manifest and fails outright if one is
+# missing. Excluding the whole directory produced
+# `stat apps/web/package.json: file does not exist` at the COPY step.
+apps/web
+!apps/web/package.json
+
+# Local and operational files.
+.git
+.github
+.vscode
+.idea
+.claude
+compose*.yaml
+observability
+load
+scripts
+docs
+postman
+claude-plans
+.tools
+coverage
+*.log
+
+# The build specification is an input document, not source.
+BUILD-PROMPT.md
