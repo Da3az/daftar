@@ -1,0 +1,135 @@
+# Caddy, serving the SPA and reverse-proxying the API from one origin.
+#
+# ## Same origin, deliberately
+#
+# The static bundle and `/v1/*` are served from the same host, so a relative
+# `fetch('/v1/orders')` works in development (through Vite's proxy) and in
+# production (through this) with no build-time API URL. There is no
+# `VITE_API_URL` that can be right in one environment and wrong in the other,
+# and no CORS preflight on every mutation.
+#
+# Automatic HTTPS is on by default — that is Caddy's reason for being here
+# rather than nginx. The only requirement is that `DAFTAR_DOMAIN` resolves to
+# this box before the container starts, or the ACME challenge fails and Caddy
+# retries with backoff.
+{
+	# Required, with no default. Placeholders do not nest — a default of
+	# `admin@{$DAFTAR_DOMAIN}` fails config load with "unrecognized placeholder",
+	# and a hardcoded fallback address would mean ACME expiry notices going
+	# somewhere nobody reads.
+	email {$ACME_EMAIL}
+
+	# Structured logs to stdout, so the container runtime collects them and the
+	# format matches the API's canonical line.
+	log {
+		output stdout
+		format json
+	}
+
+	servers {
+		# **The security control for the whole per-IP rate-limiting story.**
+		#
+		# This is the edge, so an inbound `X-Forwarded-For` came from the client
+		# and is a lie if believed. The API runs with `trustProxy` on and
+		# derives `request.ip` from that header, so a forged one would defeat
+		# every per-IP limit — including the chaos burst cap, which is the one
+		# standing between a visitor and 200 concurrent transactions.
+		#
+		# `private_ranges` means Caddy honours the header only from a private
+		# address (this compose network) and replaces it from anywhere else.
+		trusted_proxies static private_ranges
+	}
+}
+
+{$DAFTAR_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+
+	# ---------------------------------------------------------------- headers
+	header {
+		# HSTS, 1 year. Not set with `preload` — submitting to the preload list
+		# is effectively irreversible for the duration of browser release
+		# cycles, and that is not a commitment a demo should make.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# The SPA connects to Binance for market data, which the CSP has to
+		# allow explicitly — `connect-src` covers both `fetch` and WebSocket.
+		# `'unsafe-inline'` is absent from `script-src`: Vite emits no inline
+		# scripts, so allowing it would be granting permission nothing needs.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.binance.com wss://stream.binance.com:9443; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+
+		# Caddy advertises itself otherwise. Nothing is gained by naming the
+		# reverse proxy and its version to every client.
+		-Server
+	}
+
+	# ------------------------------------------------------------------- api
+	# Matched before the static handler, so `/v1/orders` never falls through to
+	# the SPA's index.html — which would return 200 with an HTML body and make
+	# a client's JSON parse the thing that reports the routing mistake.
+	@api path /v1/* /health/* /metrics /docs /docs/*
+	handle @api {
+		# `/metrics` is matched here so it is proxied rather than served as a
+		# static 404, but it is NOT exposed publicly: the block below refuses it
+		# from outside the private range. Prometheus, when it exists, scrapes
+		# the API directly on the compose network.
+		@public_metrics {
+			path /metrics
+			not remote_ip private_ranges
+		}
+		respond @public_metrics 404
+
+		reverse_proxy api:3000 {
+			# ## No `header_up X-Forwarded-For` here, on purpose
+			#
+			# The API runs with `trustProxy` on in production, so it believes
+			# `X-Forwarded-For` — which means a client that forges one could
+			# defeat every per-IP rate limit, including the chaos burst cap.
+			#
+			# The mechanism that prevents that is `trusted_proxies static
+			# private_ranges` in the global block above, not a header rewrite:
+			# Caddy honours an inbound `X-Forwarded-For` only from a trusted
+			# address and replaces it otherwise. Writing `header_up
+			# X-Forwarded-For {remote_host}` is redundant, and Caddy says so at
+			# config load ("the reverse proxy's default behavior is to pass
+			# headers to the upstream").
+			#
+			# `X-Real-IP` is also absent: nothing reads it. The API uses
+			# Fastify's `request.ip`, which derives from `X-Forwarded-For`.
+
+			# Long enough for a `serializable` write that retries under
+			# contention, short enough that a stuck request is shed rather than
+			# holding a connection. The API's own statement timeout is 15s.
+			transport http {
+				read_timeout 30s
+				write_timeout 30s
+			}
+		}
+	}
+
+	# ------------------------------------------------------------------- spa
+	handle {
+		root * /srv/web
+
+		# Hashed asset filenames are immutable, so they can be cached forever.
+		# `index.html` must not be — a stale index served from cache references
+		# asset hashes that no longer exist, and the app fails to boot with a
+		# chunk-load error after every deploy.
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+
+		encode zstd gzip
+
+		# Client-side routing: serve index.html for any path that is not a real
+		# file, so a deep link like /settlements works on a cold load.
+		try_files {path} /index.html
+		file_server
+	}
+}
