@@ -1,0 +1,24 @@
+Daftar
+Copyright (c) 2026 da3az
+
+This product includes software developed by TradingView, Inc.
+
+  TradingView Lightweight Charts™
+  Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/
+
+  Licensed under the Apache License, Version 2.0.
+  https://www.apache.org/licenses/LICENSE-2.0
+
+The Apache-2.0 licence for Lightweight Charts requires that the attribution
+notice above be reproduced and that a link to https://www.tradingview.com/
+appear on a page available to users. Both obligations are met:
+
+  - This NOTICE file reproduces the attribution.
+  - The chart's `attributionLogo` option is left **enabled**, which the library's
+    own documentation states is sufficient for the linking requirement, and the
+    application footer additionally links to TradingView and names the licence.
+
+Market data is retrieved from Binance's public market-data endpoints. It is
+displayed only. No price shown in this application is ever written to the
+ledger — orders are priced from a frozen reference price held in the database,
+and the order endpoint makes no network call of any kind.

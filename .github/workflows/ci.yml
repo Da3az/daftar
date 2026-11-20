@@ -70,11 +70,20 @@ jobs:
       - name: Build workspace packages
         run: npm run build --workspace @daftar/money
 
+      # Runs across every workspace. The web app's `typecheck` script regenerates
+      # `routeTree.gen.ts` first — it is gitignored, so without that step tsc
+      # would check the SPA against a route tree that does not exist.
       - name: Typecheck
         run: npm run typecheck
 
       - name: Lint
         run: npx eslint .
+
+      # The SPA is static output and a build failure should block the merge.
+      # Separate from typecheck because Vite catches a different class of
+      # problem — an unresolvable import, a bad glob, a missing asset.
+      - name: Build the SPA
+        run: npm run build --workspace @daftar/web
 
       - name: Format check
         run: npm run format:check

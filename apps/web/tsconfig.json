@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /*
+     * The base config targets Node, which runs TypeScript by stripping types and
+     * needs real `.ts` extensions on relative imports. Vite bundles instead, and
+     * its resolver is extensionless — so three of the base settings have to be
+     * turned back off here rather than inherited.
+     */
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": false,
+
+    // The DOM libs the base config deliberately omits, since nothing else in
+    // this repo runs in a browser.
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+
+    /*
+     * Type-checking only. Vite owns the build, so emitting here would produce a
+     * second set of outputs nobody consumes — and `composite` requires emit, so
+     * it goes too.
+     */
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+
+    "types": ["vite/client"],
+
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

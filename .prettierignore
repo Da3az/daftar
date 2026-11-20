@@ -17,3 +17,7 @@ package-lock.json
 
 # Private working notes, gitignored. Not repo source.
 claude-plans/
+
+# Editor/tool-local state. Globally gitignored, so formatting it would be
+# reformatting a file that is never committed.
+.claude/
