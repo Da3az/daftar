@@ -128,6 +128,37 @@ const schema = z.object({
   WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(1).max(86_400).default(300),
 
   /**
+   * Signing key for chaos-panel burst tokens.
+   *
+   * A **separate** secret from `WEBHOOK_SIGNING_SECRET`, not a reuse of it.
+   * They protect different things with different blast radii — the webhook
+   * secret authenticates money movement from a provider, this one gates a demo
+   * button — and sharing a key means rotating either one breaks both, so
+   * neither gets rotated.
+   *
+   * Required in production for the same reason the webhook secret is: with a
+   * known fallback, the token gate on an endpoint that opens 200 concurrent
+   * transactions is decorative.
+   */
+  CHAOS_TOKEN_SECRET: z.string().min(16).optional(),
+
+  /**
+   * Per-IP ceilings on the chaos endpoints, declared separately from
+   * `RATE_LIMIT_MAX` and far tighter.
+   *
+   * Separate because `RATE_LIMIT_MAX` is raised to six figures for benchmark
+   * runs, and a burst endpoint that inherits that inherits no limit at all —
+   * one request there becomes up to 200 concurrent database transactions.
+   *
+   * Configurable for the same reason the global limit is: the test suite fires
+   * more bursts in a few seconds than any human will, and without a knob the
+   * suite would be asserting against the rate limiter instead of the ledger.
+   * Raising it for a test run is legitimate; the defaults are what ships.
+   */
+  CHAOS_SESSION_RATE_MAX: z.coerce.number().int().min(1).default(10),
+  CHAOS_BURST_RATE_MAX: z.coerce.number().int().min(1).default(6),
+
+  /**
    * Global per-IP request ceiling.
    *
    * Configurable because a load run comes from **one** IP and is therefore
@@ -192,9 +223,13 @@ type RawEnv = z.infer<typeof schema>;
  * so the exported type makes it required. Consumers never have to handle an
  * `undefined` that cannot actually occur.
  */
-export type Env = Omit<RawEnv, 'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET'> & {
+export type Env = Omit<
+  RawEnv,
+  'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET' | 'CHAOS_TOKEN_SECRET'
+> & {
   ALLOW_FLAG_HEADERS: boolean;
   WEBHOOK_SIGNING_SECRET: string;
+  CHAOS_TOKEN_SECRET: string;
 };
 
 function load(source: NodeJS.ProcessEnv): Env {
@@ -225,6 +260,13 @@ function load(source: NodeJS.ProcessEnv): Env {
     process.exit(78);
   }
 
+  // Same rule, same reason: with a publicly-known fallback, the token gate on
+  // an endpoint that opens 200 concurrent transactions is decorative.
+  if (env.NODE_ENV === 'production' && env.CHAOS_TOKEN_SECRET === undefined) {
+    process.stderr.write('\nCHAOS_TOKEN_SECRET is required when NODE_ENV=production.\n\n');
+    process.exit(78);
+  }
+
   // Defaulting one field from another cannot be expressed inside the schema
   // without making the field's type optional at every use site, so it happens
   // here, once, where both values are known.
@@ -233,6 +275,7 @@ function load(source: NodeJS.ProcessEnv): Env {
     ALLOW_FLAG_HEADERS: env.ALLOW_FLAG_HEADERS ?? env.NODE_ENV !== 'production',
     WEBHOOK_SIGNING_SECRET:
       env.WEBHOOK_SIGNING_SECRET ?? 'whsec_development_only_not_a_real_secret',
+    CHAOS_TOKEN_SECRET: env.CHAOS_TOKEN_SECRET ?? 'chaos_development_only_not_a_real_secret',
   };
 }
 

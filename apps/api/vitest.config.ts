@@ -20,6 +20,18 @@ export default defineConfig({
       LOG_LEVEL: 'silent',
       LOG_PRETTY: 'false',
       ALLOW_FLAG_HEADERS: 'true',
+
+      /**
+       * The chaos endpoints ship with per-IP limits of 10 and 6 per minute. The
+       * suite fires far more than that in a few seconds from one address, and
+       * without raising them here the chaos tests assert against the rate
+       * limiter rather than against the ledger — which is exactly the mistake
+       * the Phase 1 load harness made once already.
+       *
+       * Raised only for the suite. The defaults in `src/env.ts` are what ships.
+       */
+      CHAOS_SESSION_RATE_MAX: '10000',
+      CHAOS_BURST_RATE_MAX: '10000',
     },
 
     /**
