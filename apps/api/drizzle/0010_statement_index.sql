@@ -1,0 +1,99 @@
+-- The account-statement index, added deliberately and with its cost measured.
+--
+-- ## What it fixes
+--
+-- `reports/statement.sql` filters `entries` by `account_id` and orders by
+-- `(created_at, id)`. With only `entries_pkey` and `entries_transaction_id_idx`
+-- in place, that is a Parallel Seq Scan of the whole table plus a Sort:
+--
+--   Parallel Seq Scan on entries  (rows=28606 loops=3)
+--     Filter: (account_id = 110)
+--     Rows Removed by Filter: 4229832
+--     Buffers: shared hit=1728 read=133892
+--   Execution Time: 161.451 ms          (warm, stable across runs)
+--
+-- 133,892 buffers is about 1 GB of reads to return 500 rows. With the index:
+--
+--   Index Scan using entries_account_statement_idx  (rows=501 loops=1)
+--     Index Cond: (account_id = 110)
+--     Buffers: shared hit=3 read=503
+--   Execution Time: 4.208 ms
+--
+-- **161.451 ms -> 4.208 ms, a 38x reduction, and 133,028 buffer reads -> 503.**
+--
+-- ## What it costs
+--
+-- | | before | after | delta |
+-- |---|---|---|---|
+-- | index size | — | 514 MB | +514 MB |
+-- | `entries` total | 1579 MB | 2150 MB | +36% |
+-- | bulk write rate | 24,845 entries/s | 23,929 entries/s | **-3.7%** |
+--
+-- Write amplification is the real price: every insert into `entries` now
+-- maintains a second 514 MB btree. At four entries per order that is four extra
+-- index insertions per order, and the measured cost is a few percent of write
+-- throughput. Worth it here because the statement query is user-facing and the
+-- write path has headroom; the number is recorded so the trade is auditable
+-- rather than assumed.
+--
+-- ## Column order is not arbitrary
+--
+-- `(account_id, created_at, id)` — equality column first, then the ORDER BY
+-- columns in order. That lets one index satisfy both the filter and the sort, so
+-- the Sort node disappears entirely. `(created_at, account_id)` would have to
+-- scan every timestamp and filter, which is barely better than the seq scan.
+--
+-- `id` is in the index for the same reason it is in the ORDER BY: it makes the
+-- order total. See reports/statement.sql.
+--
+-- ## A note on CONCURRENTLY
+--
+-- This runs as a plain `CREATE INDEX`, which takes ACCESS EXCLUSIVE on `entries`
+-- and blocks writes for its duration (measured: ~4.6 s at 12.8M rows).
+--
+-- `CREATE INDEX CONCURRENTLY` avoids that, but **cannot run inside a transaction
+-- block** — and drizzle wraps each migration in one. So a concurrent build has
+-- to be executed outside the migration runner, by hand or by a separate step,
+-- with the migration then recording it as already present.
+--
+-- For a 4.6-second write stall on a system with no users yet, the plain form is
+-- the honest choice. The moment that is not true, the procedure is: build the
+-- index with CONCURRENTLY against the live database, verify `indisvalid` in
+-- `pg_index`, and only then ship a migration that creates it `IF NOT EXISTS`.
+-- Written down because "we will remember to do it concurrently" is not a plan.
+
+CREATE INDEX IF NOT EXISTS entries_account_statement_idx
+  ON entries (account_id, created_at, id);
+--> statement-breakpoint
+
+-- ## The index that was NOT worth it
+--
+-- A covering variant was built, measured, and dropped:
+--
+--   CREATE INDEX entries_statement_covering_idx
+--     ON entries (account_id, created_at, id)
+--     INCLUDE (amount, direction, unit, transaction_id);
+--
+-- It worked exactly as intended. The planner used it and the scan became an
+-- Index Only Scan, with the `entries` node dropping from 2.873 ms to 0.081 ms —
+-- a 35x improvement on that step.
+--
+-- And it was still not worth it. Total execution went 4.208 ms -> 3.645 ms: half
+-- a millisecond, 13%. The remaining time is the Memoize plus 501 primary-key
+-- lookups into `ledger_transactions` for the `kind` column, so eliminating the
+-- heap fetch optimised a step that was no longer the bottleneck.
+--
+--   | | plain | covering |
+--   |---|---|---|
+--   | index size | 540 MB | 868 MB |
+--   | `entries` total | 2150 MB | 3067 MB |
+--   | execution | 4.208 ms | 3.645 ms |
+--
+-- **328 MB of additional index, maintained on every write, for 0.5 ms.**
+-- Declined. If that half-millisecond ever matters, the cheaper fix is to
+-- denormalise `kind` onto `entries` and remove the join altogether — which
+-- costs one small column rather than a second copy of four.
+--
+-- Recorded here rather than silently omitted, because "we added indexes and it
+-- got faster" is a much weaker claim than knowing where the next one stops
+-- paying.
