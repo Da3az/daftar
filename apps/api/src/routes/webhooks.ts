@@ -13,6 +13,7 @@ import {
   type InboundEvent,
 } from '../webhooks/process.ts';
 import { post } from '../ledger/post.ts';
+import { webhookDeliveries, webhookDuplicates } from '../observability/metrics.ts';
 
 /**
  * # `POST /v1/webhooks/:provider`
@@ -64,6 +65,8 @@ const WebhookRejection = z.object({
   error: z.string(),
   message: z.string(),
 });
+
+type Outcome = z.infer<typeof WebhookAck> | z.infer<typeof WebhookRejection>;
 
 const PROVIDERS = ['simbank'] as const;
 
@@ -117,250 +120,295 @@ export const webhookRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     handler: async (request, reply) => {
       const provider = request.params.provider;
-      const rawBody = request.rawBody ?? Buffer.alloc(0);
-      const header = request.headers[SIGNATURE_HEADER];
-
-      if (typeof header !== 'string') {
-        reply.status(401);
-        return {
-          received: false as const,
-          error: 'missing_signature',
-          message: `${SIGNATURE_HEADER} header is required`,
-        };
-      }
-
-      // STEP 1 — nothing below this line trusts anything from the request until
-      // the signature has vouched for it.
-      const verification = verify({
-        secret: env.WEBHOOK_SIGNING_SECRET,
-        rawBody,
-        header,
-        nowSeconds: Math.floor(Date.now() / 1000),
-        toleranceSeconds: env.WEBHOOK_TOLERANCE_SECONDS,
-      });
-
-      if (!verification.valid) {
-        app.log.warn(
-          { provider, reason: verification.reason },
-          'webhook signature verification failed',
-        );
-        reply.status(401);
-        return {
-          received: false as const,
-          error: verification.reason,
-          message:
-            verification.reason === 'malformed_header'
-              ? verification.detail
-              : 'signature does not match the raw request body',
-        };
-      }
-
-      // STEP 2 — the bytes are authentic; now they can be parsed.
-      let payload: z.infer<typeof WebhookPayload>;
-      try {
-        payload = WebhookPayload.parse(JSON.parse(rawBody.toString('utf8')));
-      } catch {
-        reply.status(400);
-        return {
-          received: false as const,
-          error: 'malformed_payload',
-          message: 'authentic request, but the body is not a valid event',
-        };
-      }
-
-      const event: InboundEvent = {
-        provider,
-        idempotencyKey: payload.id,
-        objectId: payload.objectId,
-        eventType: payload.type,
-        payloadHash: verification.payloadHash,
-        payload: JSON.parse(rawBody.toString('utf8')),
-        signatureValid: true,
-        signedAt: new Date(verification.timestamp * 1000),
-        withinWindow: verification.withinWindow,
-      };
 
       /**
-       * An authentic but stale payload is stored and rejected. Stored, because
-       * the Settlements page should show that it arrived; rejected, because
-       * accepting it would make a captured request replayable forever.
+       * The whole delivery, as one function with one return type.
+       *
+       * Wrapped rather than inlined so the metrics below have a **single**
+       * accounting point. Nine `inc()` calls scattered across nine return
+       * statements is how a metric quietly stops counting one branch, and the
+       * branch it stops counting is invariably the interesting one.
+       *
+       * `outcome` is the rejection's `error` code or the ack's `state`, both of
+       * which are closed sets — nine values between them. It is deliberately
+       * finer-grained than the status code: `400` covers both a malformed
+       * payload and a replay outside the window, and those are completely
+       * different operational facts.
        */
-      if (!verification.withinWindow) {
-        await timed(request, () => ingest(app.pool, { ...event, signatureValid: true }));
-        app.log.warn(
-          { provider, event_id: payload.id, age_seconds: verification.ageSeconds },
-          'webhook outside replay window',
-        );
-        reply.status(400);
-        return {
-          received: false as const,
-          error: 'stale_timestamp',
-          message: `signed ${String(verification.ageSeconds)}s from now, outside the ${String(env.WEBHOOK_TOLERANCE_SECONDS)}s window`,
-        };
-      }
+      const deliver = async (): Promise<Outcome> => {
+        const rawBody = request.rawBody ?? Buffer.alloc(0);
+        const header = request.headers[SIGNATURE_HEADER];
 
-      // STEP 3 — the unique index decides, not a prior SELECT.
-      const outcome = await timed(request, () => ingest(app.pool, event));
+        if (typeof header !== 'string') {
+          reply.status(401);
+          return {
+            received: false as const,
+            error: 'missing_signature',
+            message: `${SIGNATURE_HEADER} header is required`,
+          };
+        }
 
-      if (outcome.status === 'payload_conflict') {
-        /**
-         * Same event id, different bytes. A provider bug or a modified replay.
-         * Logged at error level and never silently accepted — and only
-         * detectable because the payload hash is stored.
-         */
-        app.log.error(
-          {
-            provider,
-            event_id: payload.id,
-            stored_hash: outcome.storedHash,
-            incoming_hash: outcome.incomingHash,
-          },
-          'webhook payload conflict: same key, different payload',
-        );
-        reply.status(409);
-        return {
-          received: false as const,
-          error: 'payload_conflict',
-          message: 'this event id was already delivered with a different payload',
-        };
-      }
+        // STEP 1 — nothing below this line trusts anything from the request
+        // until the signature has vouched for it.
+        const verification = verify({
+          secret: env.WEBHOOK_SIGNING_SECRET,
+          rawBody,
+          header,
+          nowSeconds: Math.floor(Date.now() / 1000),
+          toleranceSeconds: env.WEBHOOK_TOLERANCE_SECONDS,
+        });
 
-      if (outcome.status === 'in_flight') {
-        /**
-         * **409, not 200.** The first delivery is still working and may yet
-         * fail. Answering 200 here tells the provider to stop retrying, and if
-         * the work then fails the event is lost permanently while their
-         * dashboard shows it delivered.
-         */
-        reply.status(409);
-        return {
-          received: false as const,
-          error: 'in_progress',
-          message: 'this event is already being processed; retry shortly',
-        };
-      }
+        if (!verification.valid) {
+          app.log.warn(
+            { provider, reason: verification.reason },
+            'webhook signature verification failed',
+          );
+          reply.status(401);
+          return {
+            received: false as const,
+            error: verification.reason,
+            message:
+              verification.reason === 'malformed_header'
+                ? verification.detail
+                : 'signature does not match the raw request body',
+          };
+        }
 
-      if (outcome.status === 'duplicate') {
-        reply.status(200);
-        return {
-          received: true as const,
-          eventId: payload.id,
-          state: outcome.state as 'processed' | 'failed' | 'ignored',
-          duplicate: true,
-          deliveryCount: outcome.deliveryCount,
-          transactionId: null,
-        };
-      }
+        // STEP 2 — the bytes are authentic; now they can be parsed.
+        let payload: z.infer<typeof WebhookPayload>;
+        try {
+          payload = WebhookPayload.parse(JSON.parse(rawBody.toString('utf8')));
+        } catch {
+          reply.status(400);
+          return {
+            received: false as const,
+            error: 'malformed_payload',
+            message: 'authentic request, but the body is not a valid event',
+          };
+        }
 
-      // STEP 4 — the same object under a different event id.
-      const objectCheck = await timed(request, () =>
-        alreadySettledForObject(app.pool, {
+        const event: InboundEvent = {
           provider,
+          idempotencyKey: payload.id,
           objectId: payload.objectId,
           eventType: payload.type,
-          excludeId: outcome.id,
-        }),
-      );
+          payloadHash: verification.payloadHash,
+          payload: JSON.parse(rawBody.toString('utf8')),
+          signatureValid: true,
+          signedAt: new Date(verification.timestamp * 1000),
+          withinWindow: verification.withinWindow,
+        };
 
-      if (objectCheck.duplicate) {
-        app.log.warn(
-          { provider, event_id: payload.id, existing_key: objectCheck.existingKey },
-          'same object and event type already settled under a different event id',
+        /**
+         * An authentic but stale payload is stored and rejected. Stored, because
+         * the Settlements page should show that it arrived; rejected, because
+         * accepting it would make a captured request replayable forever.
+         */
+        if (!verification.withinWindow) {
+          await timed(request, () => ingest(app.pool, { ...event, signatureValid: true }));
+          app.log.warn(
+            { provider, event_id: payload.id, age_seconds: verification.ageSeconds },
+            'webhook outside replay window',
+          );
+          reply.status(400);
+          return {
+            received: false as const,
+            error: 'stale_timestamp',
+            message: `signed ${String(verification.ageSeconds)}s from now, outside the ${String(env.WEBHOOK_TOLERANCE_SECONDS)}s window`,
+          };
+        }
+
+        // STEP 3 — the unique index decides, not a prior SELECT.
+        const outcome = await timed(request, () => ingest(app.pool, event));
+
+        if (outcome.status === 'payload_conflict') {
+          /**
+           * Same event id, different bytes. A provider bug or a modified replay.
+           * Logged at error level and never silently accepted — and only
+           * detectable because the payload hash is stored.
+           */
+          app.log.error(
+            {
+              provider,
+              event_id: payload.id,
+              stored_hash: outcome.storedHash,
+              incoming_hash: outcome.incomingHash,
+            },
+            'webhook payload conflict: same key, different payload',
+          );
+          reply.status(409);
+          return {
+            received: false as const,
+            error: 'payload_conflict',
+            message: 'this event id was already delivered with a different payload',
+          };
+        }
+
+        if (outcome.status === 'in_flight') {
+          /**
+           * **409, not 200.** The first delivery is still working and may yet
+           * fail. Answering 200 here tells the provider to stop retrying, and if
+           * the work then fails the event is lost permanently while their
+           * dashboard shows it delivered.
+           */
+          reply.status(409);
+          return {
+            received: false as const,
+            error: 'in_progress',
+            message: 'this event is already being processed; retry shortly',
+          };
+        }
+
+        if (outcome.status === 'duplicate') {
+          reply.status(200);
+          return {
+            received: true as const,
+            eventId: payload.id,
+            state: outcome.state as 'processed' | 'failed' | 'ignored',
+            duplicate: true,
+            deliveryCount: outcome.deliveryCount,
+            transactionId: null,
+          };
+        }
+
+        // STEP 4 — the same object under a different event id.
+        const objectCheck = await timed(request, () =>
+          alreadySettledForObject(app.pool, {
+            provider,
+            objectId: payload.objectId,
+            eventType: payload.type,
+            excludeId: outcome.id,
+          }),
         );
-        await settle(app.pool, outcome.id, { state: 'ignored' });
-        reply.status(200);
-        return {
-          received: true as const,
-          eventId: payload.id,
-          state: 'ignored' as const,
-          duplicate: true,
-          deliveryCount: 1,
-          transactionId: null,
-        };
-      }
 
-      // STEP 5 — only one concurrent delivery proceeds.
-      if (!(await beginProcessing(app.pool, outcome.id))) {
-        reply.status(409);
-        return {
-          received: false as const,
-          error: 'in_progress',
-          message: 'another delivery claimed this event; retry shortly',
-        };
-      }
-
-      // STEP 6 — the work, with the event settled in the same transaction.
-      try {
-        if (payload.type !== 'funding.succeeded') {
-          // An event type this system does not act on. Recorded as `ignored`
-          // rather than dropped, so the Settlements page can show it arrived
-          // and was a deliberate no-op.
+        if (objectCheck.duplicate) {
+          app.log.warn(
+            { provider, event_id: payload.id, existing_key: objectCheck.existingKey },
+            'same object and event type already settled under a different event id',
+          );
           await settle(app.pool, outcome.id, { state: 'ignored' });
+          reply.status(200);
           return {
             received: true as const,
             eventId: payload.id,
             state: 'ignored' as const,
-            duplicate: false,
+            duplicate: true,
             deliveryCount: 1,
             transactionId: null,
           };
         }
 
-        if (payload.accountId === undefined || payload.amount === undefined) {
-          await settle(app.pool, outcome.id, {
-            state: 'failed',
-            errorDetail: 'funding.succeeded requires accountId and amount',
-          });
-          reply.status(422);
+        // STEP 5 — only one concurrent delivery proceeds.
+        if (!(await beginProcessing(app.pool, outcome.id))) {
+          reply.status(409);
           return {
             received: false as const,
-            error: 'incomplete_event',
-            message: 'funding.succeeded requires accountId and amount',
+            error: 'in_progress',
+            message: 'another delivery claimed this event; retry shortly',
           };
         }
 
-        const result = await timed(request, () =>
-          fundAccount(app, {
-            accountExternalId: payload.accountId!,
-            amount: payload.amount!,
-            eventRowId: outcome.id,
-            mode: request.ctx.flags.concurrencyMode,
-          }),
-        );
+        // STEP 6 — the work, with the event settled in the same transaction.
+        try {
+          if (payload.type !== 'funding.succeeded') {
+            // An event type this system does not act on. Recorded as `ignored`
+            // rather than dropped, so the Settlements page can show it arrived
+            // and was a deliberate no-op.
+            await settle(app.pool, outcome.id, { state: 'ignored' });
+            return {
+              received: true as const,
+              eventId: payload.id,
+              state: 'ignored' as const,
+              duplicate: false,
+              deliveryCount: 1,
+              transactionId: null,
+            };
+          }
 
-        if (result.status === 'unknown_account') {
+          if (payload.accountId === undefined || payload.amount === undefined) {
+            await settle(app.pool, outcome.id, {
+              state: 'failed',
+              errorDetail: 'funding.succeeded requires accountId and amount',
+            });
+            reply.status(422);
+            return {
+              received: false as const,
+              error: 'incomplete_event',
+              message: 'funding.succeeded requires accountId and amount',
+            };
+          }
+
+          const result = await timed(request, () =>
+            fundAccount(app, {
+              accountExternalId: payload.accountId!,
+              amount: payload.amount!,
+              eventRowId: outcome.id,
+              mode: request.ctx.flags.concurrencyMode,
+            }),
+          );
+
+          if (result.status === 'unknown_account') {
+            await settle(app.pool, outcome.id, {
+              state: 'failed',
+              errorDetail: `no account ${payload.accountId}`,
+            });
+            reply.status(422);
+            return {
+              received: false as const,
+              error: 'unknown_account',
+              message: `no account ${payload.accountId}`,
+            };
+          }
+
+          request.ctx.retryCount = result.attempts - 1;
+
+          return {
+            received: true as const,
+            eventId: payload.id,
+            state: 'processed' as const,
+            duplicate: false,
+            deliveryCount: 1,
+            transactionId: result.transactionId.toString(),
+          };
+        } catch (err) {
+          /**
+           * The work failed. The event is marked `failed` rather than left in
+           * `processing`, so a replay gets a definite answer instead of a 409
+           * forever — a key stuck in `processing` can never be retried.
+           */
           await settle(app.pool, outcome.id, {
             state: 'failed',
-            errorDetail: `no account ${payload.accountId}`,
+            errorDetail: err instanceof Error ? err.message.slice(0, 500) : 'unknown',
           });
-          reply.status(422);
-          return {
-            received: false as const,
-            error: 'unknown_account',
-            message: `no account ${payload.accountId}`,
-          };
+          throw err;
         }
+      };
 
-        request.ctx.retryCount = result.attempts - 1;
+      try {
+        const outcome = await deliver();
 
-        return {
-          received: true as const,
-          eventId: payload.id,
-          state: 'processed' as const,
-          duplicate: false,
-          deliveryCount: 1,
-          transactionId: result.transactionId.toString(),
-        };
-      } catch (err) {
-        /**
-         * The work failed. The event is marked `failed` rather than left in
-         * `processing`, so a replay gets a definite answer instead of a 409
-         * forever — a key stuck in `processing` can never be retried.
-         */
-        await settle(app.pool, outcome.id, {
-          state: 'failed',
-          errorDetail: err instanceof Error ? err.message.slice(0, 500) : 'unknown',
+        webhookDeliveries.inc({
+          provider,
+          outcome: outcome.received ? outcome.state : outcome.error,
         });
+
+        /**
+         * The duplicate *rate* is this counter over `webhookDeliveries`, divided
+         * at query time. Both the `duplicate` ack path (same event id) and the
+         * `payload_conflict` / `in_progress` rejections are redeliveries, but
+         * only the first is a benign one — so only it is counted here, and the
+         * others stay visible under their own `outcome` label.
+         */
+        if (outcome.received && outcome.duplicate) {
+          webhookDuplicates.inc({ provider });
+        }
+
+        return outcome;
+      } catch (err) {
+        // A throw reaches the error handler as a 500. Counted, because an
+        // uncounted 500 makes every ratio built on this metric wrong by exactly
+        // the amount that matters most.
+        webhookDeliveries.inc({ provider, outcome: 'error' });
         throw err;
       }
     },

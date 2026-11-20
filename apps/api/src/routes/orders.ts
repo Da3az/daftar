@@ -6,6 +6,7 @@ import { CashAmountOut, ExternalId, PositiveQuantity } from '../contracts/money.
 import { placeOrder } from '../orders/place.ts';
 import { UNIQUE_VIOLATION, sqlstateOf } from '../ledger/sqlstate.ts';
 import { claim, hashRequest, settle } from '../idempotency/keys.ts';
+import { idempotencyOutcomes, ledgerAttempts, ordersTotal } from '../observability/metrics.ts';
 
 const PlaceOrderBody = z.object({
   externalId: ExternalId.describe('Caller-supplied unique id for this order.'),
@@ -107,6 +108,11 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
           }),
         );
 
+        // Counted for all four outcomes, including `claimed`, so the duplicate
+        // rate has a denominator. A `mismatch` series that is not flat means a
+        // client is generating keys wrongly, which is worth seeing.
+        idempotencyOutcomes.inc({ outcome: outcome.status });
+
         switch (outcome.status) {
           case 'replay': {
             /**
@@ -160,6 +166,20 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
         // Surfaced on the canonical log line, so a run's retry rate is
         // observable without a separate metrics pipeline.
         request.ctx.retryCount = result.attempts - 1;
+
+        /**
+         * `outcome` is `result.status`, which is a closed union of five values —
+         * a bounded label set. It is deliberately not the HTTP status: `404`
+         * covers both an unknown instrument and an unknown account, and those
+         * are different operational facts.
+         */
+        ordersTotal.inc({ side: body.side, outcome: result.status });
+
+        // Attempts per *successful* write, so the histogram is not polluted by
+        // requests that failed validation on attempt one.
+        if (result.status === 'placed') {
+          ledgerAttempts.observe({ mode: request.ctx.flags.concurrencyMode }, result.attempts);
+        }
 
         switch (result.status) {
           case 'placed': {
