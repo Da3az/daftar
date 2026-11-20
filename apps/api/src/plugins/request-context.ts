@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyRequest } from 'fastify';
 import { describeFlags, resolveFlags, type RequestFlags } from '../flags.ts';
+import { traceIds } from './metrics.ts';
 
 /**
  * Per-request mutable accumulator for the canonical log line.
@@ -138,6 +139,9 @@ export const requestContextPlugin = fp(
             sqlstate: ctx.sqlstate,
             account_id: ctx.accountId,
             mode: describeFlags(ctx.flags),
+            // Present whether or not the span was sampled, so an unsampled
+            // failure is still correlatable. See plugins/metrics.ts.
+            ...traceIds(),
           },
           'request',
         );

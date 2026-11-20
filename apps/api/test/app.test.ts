@@ -115,11 +115,24 @@ describe('the canonical log line', () => {
         'request_id',
         'retry_count',
         'route',
+        'span_id',
         'sqlstate',
         'status',
         'time',
+        'trace_id',
       ].sort(),
     );
+
+    /**
+     * Present and `null`, not absent.
+     *
+     * Tracing is off in tests, and the correlation keys still have to be on the
+     * line — a log consumer that indexes `trace_id` should see one stable shape
+     * whether or not the span was sampled. See `traceIds()` in
+     * src/plugins/metrics.ts.
+     */
+    expect(line.trace_id).toBeNull();
+    expect(line.span_id).toBeNull();
 
     expect(line).toMatchObject({
       method: 'GET',
