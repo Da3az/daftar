@@ -1,0 +1,91 @@
+# Alertmanager.
+#
+# Prometheus evaluates rules; it does not notify. Without this process, a firing
+# alert is a row in a web UI nobody is looking at. Alertmanager is what turns it
+# into a message, and it is also what does the three things a notifier has to do
+# to be usable rather than merely loud:
+#
+#   - **group** related alerts into one message
+#   - **inhibit** a symptom when its cause is already firing
+#   - **silence** a known issue without editing rules
+#
+# All three are configured below.
+
+global:
+  # How long a firing alert may go un-refreshed before it is treated as
+  # resolved. Must be comfortably longer than Prometheus's evaluation_interval
+  # (15s) — set too low, every alert flaps resolved/firing forever.
+  resolve_timeout: 5m
+
+route:
+  receiver: local-sink
+
+  # Group by alertname and severity, NOT by instance. Grouping by instance
+  # means a shared-cause outage sends one message per box, which is the fastest
+  # way to train people to ignore the channel.
+  group_by: ['alertname', 'severity']
+
+  # Wait 30s before sending a new group, so alerts that fire together arrive in
+  # one message rather than three.
+  group_wait: 30s
+
+  # Then at most one update per group every 5 minutes while it is still firing...
+  group_interval: 5m
+
+  # ...and re-notify an unresolved group every 4 hours. Long on purpose: a
+  # 30-minute repeat on a long-running incident is just noise on top of an
+  # incident someone is already working.
+  repeat_interval: 4h
+
+  routes:
+    # Critical goes to the same place here because there is only one place. In a
+    # real deployment this is the split between a chat channel and a pager, and
+    # the shape of the routing tree is the same either way.
+    - matchers:
+        - severity = critical
+      receiver: local-sink
+      group_wait: 0s # a critical alert does not wait to be grouped
+      repeat_interval: 1h
+
+# Inhibition: suppress the symptom when the cause is already firing.
+#
+# TargetDown means Prometheus cannot scrape the API. Every other alert in
+# daftar.yml is derived from that scrape, so while TargetDown is firing the
+# others are at best meaningless and at worst actively misleading. Sending all
+# of them is how one failure becomes eleven messages.
+inhibit_rules:
+  - source_matchers:
+      - alertname = TargetDown
+    target_matchers:
+      - severity =~ "warning|critical"
+    # Only within the same environment: a target down in staging must not
+    # silence a real alert in production.
+    equal: ['environment']
+
+receivers:
+  # A webhook receiver pointed at a container that logs what it receives.
+  #
+  # This exists so the alerting path is demonstrable end-to-end rather than
+  # asserted: rule fires in Prometheus -> alert reaches Alertmanager -> grouped
+  # -> delivered -> printed. docs/alerting.md captures all four.
+  #
+  # It is not a stand-in for a real integration, and the absence of one is
+  # recorded honestly: Slack and PagerDuty need an account and a credential
+  # that does not exist for this project. The config for both is below,
+  # commented, because the part that is actually hard to get right is the
+  # routing and grouping above — and that part is real.
+  - name: local-sink
+    webhook_configs:
+      - url: http://alert-sink:9099/alerts
+        send_resolved: true
+
+  # - name: slack
+  #   slack_configs:
+  #     - api_url_file: /run/secrets/slack_webhook_url  # never inline, never in git
+  #       channel: '#daftar-alerts'
+  #       send_resolved: true
+  #       title: '{{ .CommonLabels.severity | toUpper }}: {{ .CommonAnnotations.summary }}'
+  #       text: |
+  #         {{ range .Alerts }}{{ .Annotations.description }}
+  #         Runbook: {{ .Annotations.runbook }}
+  #         {{ end }}

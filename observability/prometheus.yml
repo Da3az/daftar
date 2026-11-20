@@ -1,0 +1,70 @@
+# Prometheus scrape configuration.
+#
+# One target. This is a single-service topology, so there is no service
+# discovery, no relabelling, and no federation — all of which would be
+# machinery for a problem that does not exist here.
+
+global:
+  # 15s is a deliberate middle: fine enough that a 1-minute alert window has
+  # four samples to work with, coarse enough that the metrics endpoint's own
+  # cost stays negligible. The outbox gauges run a database query per scrape,
+  # so this interval is also the query rate for `outbox_lag`.
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+  # How often rules are evaluated. Equal to the scrape interval: evaluating
+  # faster than data arrives just re-reads the same samples.
+  evaluation_interval: 15s
+
+  external_labels:
+    # Identifies which box produced an alert once there is more than one.
+    # Required by Alertmanager's grouping to be meaningful.
+    environment: local
+
+rule_files:
+  # Relative to this file's directory, which is the whole `observability/`
+  # directory mounted read-only. Mounted as a directory and not as individual
+  # files — see the long note in compose.observability.yaml about single-file
+  # bind mounts pinning an inode.
+  - /etc/daftar-obs/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        # Loopback, not the service name `alertmanager`: Prometheus runs in the
+        # host network namespace so it has no access to compose's DNS. See the
+        # long note at the top of compose.observability.yaml for why — the host
+        # firewall drops Docker-bridge traffic to host ports, so the API cannot
+        # be scraped from the bridge at all.
+        - targets: ['127.0.0.1:9093']
+
+scrape_configs:
+  - job_name: daftar-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:3000']
+        labels:
+          service: daftar-api
+
+  # Prometheus scraping itself. Cheap, and it is how you find out that the
+  # thing meant to tell you about problems is itself having one. It is also
+  # where `prometheus_tsdb_retention_limit_bytes` comes from, which the
+  # PrometheusDiskLow rule divides by.
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Alertmanager. `alertmanager_notifications_failed_total` is the metric that
+  # catches the notifier itself being broken — the failure mode where every
+  # rule evaluates correctly and nobody is ever told.
+  - job_name: alertmanager
+    static_configs:
+      - targets: ['127.0.0.1:9093']
+
+  # Jaeger's collector pipeline, exposed on :8888 by observability/jaeger.yml.
+  # `otelcol_exporter_send_failed_spans` is the one that matters: a trace
+  # backend quietly dropping spans looks exactly like an application that never
+  # emitted them.
+  - job_name: jaeger
+    static_configs:
+      - targets: ['127.0.0.1:8888']

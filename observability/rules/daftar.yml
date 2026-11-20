@@ -1,0 +1,263 @@
+# Alert rules, as code.
+#
+# Every threshold below has a reason next to it. "What I would alert on" is a
+# much weaker artefact than a rule that has been loaded by Prometheus and seen
+# to fire — see docs/alerting.md for one that did.
+#
+# Three things deliberately absent:
+#
+#  - **No alert on absolute RSS.** A tracing library that leaks a few megabytes
+#    an hour never crosses a sensible absolute threshold until it suddenly does.
+#    The alert is on the *slope*, below.
+#  - **No alert on error rate alone.** At this traffic volume a single 500 is
+#    1/50th of a 50-request minute, so a ratio alert would be pure noise. The
+#    SLO alert covers user-visible harm; the canonical log line covers the rest.
+#  - **No alert per account.** Metrics are not labelled by account id, so this
+#    is not even expressible — which is the point.
+
+groups:
+  - name: daftar-slo
+    interval: 15s
+    rules:
+      # The SLO, stated as a rule.
+      #
+      # p99 of POST /v1/orders under 200ms. The histogram has a bucket boundary
+      # at exactly 0.2 precisely so this does not have to interpolate across
+      # the threshold it is defined on.
+      #
+      # `for: 2m` because a 30-second spike during a deploy or a VACUUM is not
+      # an incident. Eight consecutive evaluations of sustained breach is.
+      - alert: OrderLatencySLOBreach
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (
+              rate(daftar_http_request_duration_seconds_bucket{route="/v1/orders",method="POST"}[5m])
+            )
+          ) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+          slo: order_latency
+        annotations:
+          summary: 'POST /v1/orders p99 above the 200ms SLO'
+          description: >-
+            p99 is {{ $value | humanizeDuration }} over the last 5 minutes.
+            The SLO is 200ms at 50 concurrent users spread over at least 1000
+            accounts — check the account spread before concluding this is a
+            regression, because the same build does 186 orders/s on one account
+            and 1455 on a thousand (docs/evidence/03-concurrency-tradeoff.md).
+          runbook: docs/alerting.md#orderlatencyslobreach
+
+  - name: daftar-ledger
+    interval: 15s
+    rules:
+      # Serialization failures reaching the client.
+      #
+      # Retries are normal under `serializable` and are NOT alerted on — Phase 3
+      # measured 44% of orders needing at least one retry at 1000 accounts, and
+      # paging on that would page constantly. What matters is retries being
+      # *exhausted*, which is a 5xx the customer saw.
+      #
+      # Deliberately split by sqlstate so the alert says which: 40001 means
+      # contention, 40P01 means the lock ordering has a hole in it and is a far
+      # more serious finding.
+      - alert: LedgerDeadlocksDetected
+        expr: increase(daftar_ledger_retries_total{sqlstate="40P01"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          sqlstate: '40P01'
+        annotations:
+          summary: 'Deadlock (40P01) in the ledger write path'
+          description: >-
+            {{ $value }} deadlock(s) in 10 minutes. `pessimistic` and `advisory`
+            acquire locks in ascending account id order, so a wait-for cycle
+            should be impossible by construction. A 40P01 means a write path
+            exists that does not sort its locks. This is a code bug, not a load
+            problem — do not tune anything, find the path.
+          runbook: docs/alerting.md#ledgerdeadlocksdetected
+
+      # `for: 0m` and a 10-minute window: one deadlock is worth knowing about
+      # immediately, because the claim it falsifies is structural.
+
+      - alert: LedgerRetryStorm
+        expr: |
+          sum(rate(daftar_ledger_retries_total{sqlstate="40001"}[5m]))
+            / clamp_min(sum(rate(daftar_orders_total[5m])), 0.01)
+            > 3
+        for: 5m
+        labels:
+          severity: warning
+          sqlstate: '40001'
+        annotations:
+          summary: 'More than 3 serialization retries per order, sustained'
+          description: >-
+            {{ $value | printf "%.1f" }} retries per order over 5 minutes. Under
+            `serializable` this is the signature of contention concentrating —
+            most likely traffic collapsing onto a few accounts. Phase 3's
+            1-account profile produced exactly this. Check the account spread
+            and consider `advisory`, which ships as the default for this reason.
+          runbook: docs/alerting.md#ledgerretrystorm
+
+  - name: daftar-outbox
+    interval: 15s
+    rules:
+      # Outbox lag: the age of the oldest unpublished event.
+      #
+      # THE most important alert in this file. A rising lag means the worker is
+      # down, slower than the write rate, or stuck on a poison message — and it
+      # is visible long before anything downstream notices it has stopped
+      # receiving events, which would otherwise be found by a customer.
+      #
+      # 300s because the worker polls every few seconds and backs off
+      # exponentially on failure; five minutes of lag cannot be explained by
+      # normal backoff.
+      - alert: OutboxLagHigh
+        expr: daftar_outbox{metric="oldest_unpublished_seconds"} > 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Oldest unpublished outbox event is over 5 minutes old'
+          description: >-
+            Oldest unpublished event is {{ $value | humanizeDuration }} old.
+            Delivery is at-least-once, so nothing is lost — but consumers are
+            behind. Check whether the worker is running, then
+            `SELECT * FROM outbox_shard_depth` to see whether it is one shard or
+            all of them. One shard means a poison message; all of them means the
+            worker.
+          runbook: docs/alerting.md#outboxlaghigh
+
+      # Dead-lettered events need a human by definition — they are never retried
+      # automatically. Any non-zero count is actionable.
+      - alert: OutboxDeadLetters
+        expr: daftar_outbox{metric="dead"} > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} event(s) in the outbox dead-letter state'
+          description: >-
+            These are never retried automatically and will stay until dealt
+            with. `SELECT id, event_type, attempts, last_error FROM outbox
+            WHERE state = 'dead'`.
+          runbook: docs/alerting.md#outboxdeadletters
+
+      # A claim held for a long time means the worker that took it died.
+      - alert: OutboxStaleClaims
+        expr: daftar_outbox{metric="stale_claims"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Outbox rows claimed by a worker that is no longer settling them'
+          description: >-
+            {{ $value }} row(s) claimed over 5 minutes ago. Per-account ordering
+            means the next event for those accounts cannot overtake a stuck one,
+            so the shard is blocked until `reclaimStale()` runs.
+          runbook: docs/alerting.md#outboxstaleclaims
+
+  - name: daftar-runtime
+    interval: 15s
+    rules:
+      # **The memory alert is on the slope, not the value.**
+      #
+      # `deriv()` over 6 hours gives bytes per second of growth; 20 KiB/s is
+      # about 1.7 GB/day, which no steady-state workload should produce.
+      #
+      # `for: 1h` because `deriv` over a short window is dominated by GC
+      # sawtooth. An hour of sustained positive slope is a trend.
+      #
+      # Pointed at the tracing library specifically in the description, because
+      # that is the most likely culprit in this stack and the one the
+      # instrumentation choices in observability/tracing.ts were made to avoid.
+      - alert: MemoryGrowthSustained
+        expr: deriv(daftar_memory_bytes{kind="rss"}[6h]) > 20480
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: 'RSS growing steadily — possible leak'
+          description: >-
+            RSS is growing at {{ $value | humanize }}B/s sustained over 6 hours.
+            Check `daftar_memory_bytes` broken out before anything else:
+            `heapUsed` rising is a JavaScript leak; `external` rising with a flat
+            heap is Buffers or a native addon, which is where an OpenTelemetry
+            instrumentation leak appears and is invisible if you only watch the
+            heap. If it is `external`, suspect the tracing SDK first — that is
+            why `instrumentation-fs` is not installed.
+          runbook: docs/alerting.md#memorygrowthsustained
+
+      # Event-loop delay distinguishes "the database is slow" from "Node is
+      # blocked". Those have nothing in common as fixes, and latency alone
+      # cannot tell them apart.
+      - alert: EventLoopBlocked
+        expr: daftar_event_loop_delay_seconds{quantile="p99"} > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Event-loop p99 delay above 100ms'
+          description: >-
+            p99 loop delay is {{ $value | humanizeDuration }}. The process is
+            doing synchronous work on the request path — this is NOT a database
+            problem, and tuning PostgreSQL will not help. Look for synchronous
+            JSON, crypto, or a large array operation in a handler.
+          runbook: docs/alerting.md#eventloopblocked
+
+      # Pool saturation. `waiting > 0` sustained means requests are queueing for
+      # a connection, which presents as latency and is actually capacity.
+      - alert: DatabasePoolSaturated
+        expr: daftar_db_pool{state="waiting"} > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Requests are queueing for a database connection'
+          description: >-
+            {{ $value }} request(s) waiting for a pool slot. Raising
+            DB_POOL_MAX is only correct if PostgreSQL has headroom — see the
+            connection-pool arithmetic in
+            docs/evidence/06-query-performance.md, where the benchmark
+            configuration already uses 68 of 97 usable connections.
+          runbook: docs/alerting.md#databasepoolsaturated
+
+  - name: daftar-meta
+    interval: 15s
+    rules:
+      # The alert that catches the monitoring being broken.
+      #
+      # Without this, every other rule in this file silently stops meaning
+      # anything the moment the target goes away: no data means no breach means
+      # no alert. This is the single most commonly omitted rule.
+      - alert: TargetDown
+        expr: up{job="daftar-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Prometheus cannot scrape the API'
+          description: >-
+            Either the service is down or the metrics endpoint is broken. Note
+            that while this fires, every other alert in this file is blind — an
+            absent series cannot breach a threshold.
+          runbook: docs/alerting.md#targetdown
+
+      # Disk, because every retention policy is a promise about disk and this is
+      # what catches the promise being wrong.
+      - alert: PrometheusDiskLow
+        expr: |
+          prometheus_tsdb_storage_blocks_bytes / clamp_min(prometheus_tsdb_retention_limit_bytes, 1)
+            > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Prometheus TSDB is near its retention size limit'
+          description: >-
+            Blocks occupy over 85% of the configured retention budget.
+            Retention is 15 days / 2 GB (see docs/alerting.md). Either
+            cardinality has grown or the budget needs revisiting — check for a
+            new metric label before raising the limit.
+          runbook: docs/alerting.md#prometheusdisklow

@@ -71,7 +71,13 @@ export default tseslint.config(
   // Scripts, load harness and config files are allowed to print: they are CLIs,
   // not request handlers.
   {
-    files: ['scripts/**/*.{js,mjs,ts}', 'load/**/*.js', '**/*.config.{js,ts,mjs}'],
+    files: [
+      'scripts/**/*.{js,mjs,ts}',
+      'load/**/*.js',
+      '**/*.config.{js,ts,mjs}',
+      // The alert sink's entire purpose is to print what it is sent.
+      'observability/*.mjs',
+    ],
     rules: { 'no-console': 'off' },
   },
 
@@ -98,7 +104,13 @@ export default tseslint.config(
   },
 
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.ts', 'scripts/**/*.{js,mjs,ts}'],
+    files: [
+      'apps/api/**/*.ts',
+      'packages/**/*.ts',
+      'scripts/**/*.{js,mjs,ts}',
+      // Runs under plain Node in a container, with no bundler and no deps.
+      'observability/*.mjs',
+    ],
     languageOptions: { globals: { ...globals.node } },
   },
 

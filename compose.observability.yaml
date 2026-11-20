@@ -1,0 +1,226 @@
+# The observability stack: Prometheus, Alertmanager, Jaeger, and something for
+# Alertmanager to notify.
+#
+# A separate file from compose.yaml on purpose. The database is required to run
+# the tests; this is not, and it costs about 700 MB of RAM. Folding it into the
+# default stack means every `docker compose up` pays for monitoring whether or
+# not anyone is looking at it.
+#
+#   docker compose -f compose.observability.yaml up -d
+#   docker compose -f compose.observability.yaml down -v
+#
+# ## The API is NOT in here, and that is why Prometheus uses the host network
+#
+# The API runs on the host (`npm run dev`), so Prometheus has to scrape across
+# the container boundary. The obvious way — bridge networking plus
+# `extra_hosts: host.docker.internal:host-gateway` — was tried first and does
+# not work on this box:
+#
+#   Get "http://host.docker.internal:3000/metrics": context deadline exceeded
+#
+# DNS resolves fine; the packets are dropped. This host's firewall does not
+# permit the Docker bridge subnet to reach host ports, and binding the API to
+# `0.0.0.0` does not change that — it listens on `172.29.0.1:3000` and a
+# container on `172.29.0.0/16` still times out connecting to it. Fixing that
+# means editing the host's firewall policy, which is not something a project's
+# compose file gets to do.
+#
+# So `prometheus` runs with `network_mode: host`: it shares the host's network
+# namespace, reaches the API on `127.0.0.1:3000` directly, and reaches
+# Alertmanager and Jaeger on their published loopback ports. Jaeger's metrics
+# port is published for exactly this reason.
+#
+# **A timeout here is not the same as "the API is down", and the TargetDown
+# alert cannot tell them apart.** It did fire for this, correctly, for a reason
+# that had nothing to do with the API — which is the honest shape of that
+# alert and is written up in docs/alerting.md.
+#
+# Once the API is containerised (Phase 9) this goes away: both end up on one
+# compose network and the target becomes a service name.
+#
+# ## Memory limits are published, not discovered
+#
+# Every service has a `mem_limit`. This stack shares a box with PostgreSQL and
+# the API, and an unbounded Prometheus is perfectly capable of taking the ledger
+# down with it. Phase 10's break-point test is only meaningful if the limits
+# were written down beforehand.
+#
+# ## Every config is mounted as a DIRECTORY, never as a single file
+#
+# This is not a style preference, it is a correctness fix for a bug that cost
+# real time here. A single-file bind mount (`./observability/prometheus.yml:
+# /etc/prometheus/prometheus.yml`) binds the file's **inode**. Most editors —
+# and the Write tool used to author these files — do not modify a file in
+# place; they write a new one and rename it over the old, which produces a new
+# inode. The container keeps reading the old one, forever.
+#
+# The symptom is as misleading as it gets: edit the config, `POST /-/reload`,
+# Prometheus logs "Completed loading of configuration file" with no error, and
+# the new scrape job is simply absent. `cat` on the host shows the edit is
+# there. The config inside the container still had two `job_name` entries while
+# the host file had four.
+#
+# Mounting the directory makes the mount track renames, because the directory's
+# inode is stable. Hence the single `./observability` mount per service below
+# and the `conf/` path segment inside each container.
+
+# The whole directory, read-only, mounted identically into every service. See
+# the note above on why this is not four individual file mounts.
+#
+# A scalar anchor rather than a list anchor: `- *anchor` with a list value
+# nests a list inside the `volumes:` list, which compose rejects.
+x-observability-config: &observability-config './observability:/etc/daftar-obs:ro'
+
+name: daftar-obs
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    container_name: daftar-prometheus
+    restart: unless-stopped
+    user: '65534:65534' # nobody. The official image's own default.
+    # See the long note at the top. `ports:` is deliberately absent — it is
+    # ignored under host networking, and leaving it in implies an isolation
+    # that does not exist. Prometheus binds :9090 on the host directly; the
+    # `--web.listen-address` below keeps that on loopback so it is not exposed
+    # on every interface, which is what host networking would otherwise do.
+    network_mode: host
+    command:
+      - --web.listen-address=127.0.0.1:9090
+      - --config.file=/etc/daftar-obs/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # ## Retention: whichever limit is hit first
+      #
+      # Two limits, deliberately. Time alone means an unnoticed cardinality
+      # increase fills the disk; size alone means retention silently shortens
+      # when it does. Together, the size cap is the backstop and
+      # PrometheusDiskLow fires before it bites.
+      #
+      # 15 days because the questions this data answers are "what changed since
+      # the deploy" and "is RSS trending up over a week" — the MemoryGrowthSustained
+      # rule reads a 6h window, so a fortnight is several times what it needs.
+      # Anything longer belongs in a long-term store, not in a local TSDB.
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+      # Needed for POST /-/reload, which is how a rule change is applied without
+      # losing the in-memory alert state that `for:` durations depend on.
+      - --web.enable-lifecycle
+    volumes:
+      - *observability-config
+      - prometheus-data:/prometheus
+    mem_limit: 512m
+    healthcheck:
+      # `wget` not `curl`: the Prometheus image is busybox-based and has no curl.
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9090/-/healthy']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  alertmanager:
+    image: prom/alertmanager:v0.35.0
+    container_name: daftar-alertmanager
+    restart: unless-stopped
+    user: '65534:65534'
+    ports:
+      - '127.0.0.1:9093:9093'
+    command:
+      - --config.file=/etc/daftar-obs/alertmanager.yml
+      - --storage.path=/alertmanager
+      # The URL written into notification links. Wrong by default (it would be
+      # the container's hostname), which makes every link in every alert dead.
+      - --web.external-url=http://127.0.0.1:9093
+      # Clustering off. One instance, so the gossip layer has nothing to gossip
+      # with — but it is on by default, it spends the first ten seconds of every
+      # start "waiting for gossip to settle", and the notification pipeline's
+      # wait stage is keyed off peer position and cluster readiness. An empty
+      # listen address is the documented way to run single-node.
+      - --cluster.listen-address=
+      # Debug, not info. At info level Alertmanager logs eight lines at startup
+      # and then nothing at all — not even "dispatching notification". Debugging
+      # a silent notification path with no log output is guesswork, and the
+      # volume here is a handful of lines per alert.
+      - --log.level=debug
+    volumes:
+      - *observability-config
+      - alertmanager-data:/alertmanager
+    mem_limit: 128m
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9093/-/healthy']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # Something for Alertmanager to deliver to. See observability/alert-sink.mjs
+  # for why this exists rather than a commented-out Slack webhook.
+  alert-sink:
+    image: node:26-alpine
+    container_name: daftar-alert-sink
+    restart: unless-stopped
+    user: 'node'
+    working_dir: /etc/daftar-obs
+    command: ['node', '/etc/daftar-obs/alert-sink.mjs']
+    volumes:
+      - *observability-config
+    # Not published to the host. Only Alertmanager needs to reach it, and an
+    # unauthenticated endpoint that prints whatever it is POSTed does not belong
+    # on a host port.
+    expose:
+      - '9099'
+    mem_limit: 96m
+
+  # A fresh named volume is created root-owned, and the Jaeger image runs as
+  # uid 10001 — so Badger's first `mkdir` inside it fails with EACCES and the
+  # whole process exits in a restart loop. Docker only chowns a new volume to
+  # match the image's own directory at the mount point, and the Jaeger image has
+  # no `/badger`, so there is nothing for it to copy ownership from.
+  #
+  # One short-lived root container fixes the ownership and exits. The
+  # alternative — running Jaeger itself as root — trades a four-line init
+  # service for a permanently root trace collector listening on a published
+  # port.
+  jaeger-init:
+    image: alpine:3.22
+    container_name: daftar-jaeger-init
+    user: root
+    command: ['sh', '-c', 'mkdir -p /badger/key /badger/data && chown -R 10001:10001 /badger']
+    volumes:
+      - jaeger-data:/badger
+    restart: 'no'
+
+  jaeger:
+    # Jaeger 2.x, with Badger storage on disk rather than the default in-memory
+    # store: in-memory loses every trace on restart, and the traces worth
+    # looking at are the ones from just before something crashed.
+    #
+    # **Configured by a file, not by environment variables.** Jaeger 2 is built
+    # on the OpenTelemetry Collector and ignores the v1 `SPAN_STORAGE_TYPE` /
+    # `BADGER_*` variables entirely — it starts healthy and uses memory. See the
+    # note at the top of observability/jaeger.yml; `--config` is load-bearing.
+    image: jaegertracing/jaeger:2.23.0
+    container_name: daftar-jaeger
+    restart: unless-stopped
+    command: ['--config', '/etc/daftar-obs/jaeger.yml']
+    depends_on:
+      jaeger-init:
+        condition: service_completed_successfully
+    ports:
+      - '127.0.0.1:16686:16686' # UI
+      - '127.0.0.1:4318:4318' # OTLP/HTTP — what the API exports to
+      # Jaeger's own collector metrics. Published because Prometheus runs in the
+      # host network namespace and cannot reach a bridge-only port.
+      - '127.0.0.1:8888:8888'
+      # 4317 (OTLP/gRPC) is not published, and the receiver is not enabled in
+      # jaeger.yml either. The API exports over HTTP; a second ingest path is
+      # surface for no benefit.
+    volumes:
+      - *observability-config
+      - jaeger-data:/badger
+    # The largest limit in the stack, and the one most likely to be hit. Jaeger
+    # buffers spans in memory before writing, so a traffic burst at a raised
+    # sample ratio lands here first.
+    mem_limit: 768m
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  jaeger-data:

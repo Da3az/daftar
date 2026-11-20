@@ -1,0 +1,95 @@
+# Jaeger 2.x configuration.
+#
+# ## This file exists because the v1 environment variables are silently ignored
+#
+# The first version of this stack configured Jaeger with `SPAN_STORAGE_TYPE`,
+# `BADGER_EPHEMERAL` and `BADGER_SPAN_STORE_TTL`. Those are **Jaeger 1.x**
+# variables. Jaeger 2 ignores them completely and logs:
+#
+#   No '--config' flags detected, using default All-in-One configuration with
+#   memory storage.
+#
+# Which is to say: it started, it was healthy, the UI worked, and every trace
+# was going to be lost on restart with a volume mounted and doing nothing. The
+# only reason it was caught is that the storage line was actually read rather
+# than the container being declared working because it was `Up`. Jaeger 2 is
+# built on the OpenTelemetry Collector, so it is configured by a collector
+# config file and nothing else.
+#
+# Derived from upstream's `cmd/jaeger/config-badger.yaml` at tag v2.23.0, with
+# the archive store removed and the paths pointed at the mounted volume.
+
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      # Jaeger's own metrics, on :8888, scraped by Prometheus. A trace backend
+      # that silently drops spans is worse than no trace backend, and
+      # `otelcol_exporter_send_failed_spans` is how that becomes visible.
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+    logs:
+      level: info
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_query:
+    storage:
+      traces: main
+      # No `traces_archive`. Upstream's sample config defines a second 30-day
+      # badger store; this deployment has one disk and a 768 MB memory limit,
+      # and a second store doubles the write path for data nobody promotes.
+
+  jaeger_storage:
+    backends:
+      main:
+        badger:
+          directories:
+            keys: /badger/key
+            values: /badger/data
+          # The point of the volume. `true` keeps everything in a temp dir that
+          # vanishes on restart — and the traces worth looking at are the ones
+          # from just before something crashed.
+          ephemeral: false
+          ttl:
+            # 72h, deliberately shorter than Prometheus's 15 days.
+            #
+            # A trace answers "what did this one request do", which is a
+            # question asked within hours of it happening. A metric answers
+            # "what is the trend", which is asked over weeks. The same retention
+            # for both is wrong in one direction or the other — here it would
+            # mean 15 days of spans at ~150 million/day of potential volume.
+            spans: 72h
+
+receivers:
+  otlp:
+    protocols:
+      # HTTP only. The API exports over OTLP/HTTP (see src/env.ts); enabling the
+      # gRPC receiver as well is a second ingest path listening for nothing.
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batching is not optional at any real span volume: one export per span means
+  # one HTTP request per span, and the exporter becomes the bottleneck it was
+  # meant to measure.
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: main
