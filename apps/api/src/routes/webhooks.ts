@@ -4,7 +4,12 @@ import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { env } from '../env.ts';
 import { timed } from '../plugins/request-context.ts';
 import { rawBodyPlugin } from '../webhooks/raw-body.ts';
-import { SIGNATURE_HEADER, verify } from '../webhooks/signature.ts';
+import {
+  SIGNATURE_HEADER,
+  SIGNATURE_SCHEME,
+  computeSignature,
+  verify,
+} from '../webhooks/signature.ts';
 import {
   alreadySettledForObject,
   beginProcessing,
@@ -411,6 +416,90 @@ export const webhookRoutes: FastifyPluginAsyncZod = async (app) => {
         webhookDeliveries.inc({ provider, outcome: 'error' });
         throw err;
       }
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/v1/webhooks/events/:id/replay',
+    schema: {
+      tags: ['webhooks'],
+      summary: 'Re-deliver a stored event through the real inbound path.',
+      description: [
+        'Takes the **stored payload bytes**, signs them with the current secret',
+        'and a fresh timestamp, and feeds them back through',
+        '`POST /v1/webhooks/:provider` — the same handler, the same signature',
+        'verification, the same unique index.',
+        '',
+        'It is not a shortcut that marks something re-processed. A replay of a',
+        'settled event is **expected to come back `duplicate: true` with 200**,',
+        'and that is the point: the Settlements page has a button that',
+        'demonstrates the idempotency guarantee rather than describing it.',
+        '',
+        'Dispatched in-process via Fastify’s `inject`, so it makes no network',
+        'call and cannot be pointed at anything but this server.',
+      ].join('\n'),
+      params: z.object({ id: z.string().regex(/^\d+$/) }),
+      response: {
+        200: z.object({
+          replayed: z.literal(true),
+          /** What the real handler answered. Passed through unchanged. */
+          status: z.number().int(),
+          body: z.unknown(),
+        }),
+        404: WebhookRejection,
+      },
+    },
+    handler: async (request, reply) => {
+      const { rows } = await timed(request, () =>
+        app.pool.query<{ provider: string; payload: unknown }>(
+          'SELECT provider, payload FROM webhook_events WHERE id = $1::bigint',
+          [BigInt(request.params.id)],
+        ),
+      );
+
+      const stored = rows[0];
+      if (!stored) {
+        reply.status(404);
+        return {
+          received: false as const,
+          error: 'unknown_event',
+          message: `no webhook event ${request.params.id}`,
+        };
+      }
+
+      /**
+       * Re-serialised from `jsonb`, and that is a real limitation worth stating.
+       *
+       * The original raw bytes are not kept — only the parsed payload and its
+       * hash — so this cannot reproduce the exact bytes the provider sent, and
+       * the replay's hash will differ from the stored one if the provider's
+       * formatting differed from `JSON.stringify`'s. Keeping raw bodies for
+       * every event is a per-event storage cost and a copy of every payload at
+       * rest, which is the worse trade for a demo button.
+       *
+       * What it does reproduce faithfully is the path: signature over raw bytes,
+       * then parse, then the unique index.
+       */
+      const raw = Buffer.from(JSON.stringify(stored.payload), 'utf8');
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = computeSignature(env.WEBHOOK_SIGNING_SECRET, timestamp, raw);
+
+      const injected = await app.inject({
+        method: 'POST',
+        url: `/v1/webhooks/${stored.provider}`,
+        headers: {
+          'content-type': 'application/json',
+          [SIGNATURE_HEADER]: `t=${String(timestamp)},${SIGNATURE_SCHEME}=${signature}`,
+        },
+        payload: raw,
+      });
+
+      return {
+        replayed: true as const,
+        status: injected.statusCode,
+        body: injected.json<unknown>(),
+      };
     },
   });
 };
