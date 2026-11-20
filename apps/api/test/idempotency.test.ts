@@ -6,6 +6,7 @@ import { FLAG_HEADERS } from '../src/flags.ts';
 import { HOUSE_SHARDS, positionExternalId } from '../src/orders/place.ts';
 import { claim, hashRequest, reap } from '../src/idempotency/keys.ts';
 import { useTestDatabase } from './support/test-database.ts';
+import { resetLedger } from './support/reset.ts';
 import { Barrier } from './support/barrier.ts';
 
 /**
@@ -36,13 +37,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await ctx.pool.query('ALTER TABLE entries DISABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM idempotency_keys');
-  await ctx.pool.query('DELETE FROM orders');
-  await ctx.pool.query('DELETE FROM entries');
-  await ctx.pool.query('ALTER TABLE entries ENABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM ledger_transactions');
-  await ctx.pool.query('DELETE FROM accounts');
+  await resetLedger(ctx.pool);
 
   await ctx.pool.query(
     `INSERT INTO accounts (external_id, kind, asset_symbol, balance) VALUES

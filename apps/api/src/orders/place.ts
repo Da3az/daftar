@@ -2,6 +2,7 @@ import type pg from 'pg';
 import { notional as computeNotional } from '@daftar/money';
 import type { LedgerConcurrencyMode } from '../env.ts';
 import { post, type Leg, type PostAttemptStats } from '../ledger/post.ts';
+import { enqueue } from '../outbox/worker.ts';
 
 /**
  * # `POST /v1/orders` — the measured write path
@@ -303,6 +304,31 @@ export async function placeOrder(
           transactionId.toString(),
         ],
       );
+
+      /**
+       * The outbox row, in this same transaction.
+       *
+       * Not published here — published later by the worker, with no transaction
+       * open. Writing it here is what makes "the event and the money commit
+       * together" true: a rollback takes both, and there is no window in which
+       * the ledger has moved while nothing records that an event is owed.
+       *
+       * Keyed on the customer's cash account, which is what the per-account
+       * ordering guarantee is about.
+       */
+      await enqueue(client, {
+        transactionId,
+        accountId: cashAccountId,
+        eventType: `order.${request.side}.placed`,
+        payload: {
+          orderExternalId: request.externalId,
+          symbol: request.symbol,
+          side: request.side,
+          quantity: request.quantity.toString(),
+          price: price.toString(),
+          notional: notional.toString(),
+        },
+      });
     },
   });
 

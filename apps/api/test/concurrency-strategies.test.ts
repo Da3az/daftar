@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCash } from '@daftar/money';
 import { useTestDatabase } from './support/test-database.ts';
+import { resetLedger } from './support/reset.ts';
 import { Barrier } from './support/barrier.ts';
 import { post, UnbalancedTransactionError, type PostResult } from '../src/ledger/post.ts';
 import { DEADLOCK_DETECTED, SERIALIZATION_FAILURE } from '../src/ledger/sqlstate.ts';
@@ -29,11 +30,7 @@ let house: bigint;
 let external: bigint;
 
 beforeEach(async () => {
-  await ctx.pool.query('ALTER TABLE entries DISABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM entries');
-  await ctx.pool.query('ALTER TABLE entries ENABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM ledger_transactions');
-  await ctx.pool.query('DELETE FROM accounts');
+  await resetLedger(ctx.pool);
 
   const { rows } = await ctx.pool.query<{ id: bigint; external_id: string }>(
     `INSERT INTO accounts (external_id, kind, balance) VALUES

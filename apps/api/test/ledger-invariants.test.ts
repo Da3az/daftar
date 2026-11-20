@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { useTestDatabase } from './support/test-database.ts';
+import { resetLedger } from './support/reset.ts';
 
 /**
  * # The ledger's invariants, proved against PostgreSQL
@@ -53,11 +54,7 @@ let houseAccount: bigint;
 beforeEach(async () => {
   // entries is append-only, so cleanup has to disable the guard it is testing.
   // Only legal here because the test database is this file's private clone.
-  await ctx.pool.query('ALTER TABLE entries DISABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM entries');
-  await ctx.pool.query('ALTER TABLE entries ENABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM ledger_transactions');
-  await ctx.pool.query('DELETE FROM accounts');
+  await resetLedger(ctx.pool);
 
   const { rows } = await ctx.pool.query<{ id: bigint; external_id: string }>(
     `INSERT INTO accounts (external_id, kind, balance)

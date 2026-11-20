@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { formatCash, parseCash, parseQuantity } from '@daftar/money';
 import { useTestDatabase } from './support/test-database.ts';
+import { resetInstruments, resetLedger } from './support/reset.ts';
 import { Barrier } from './support/barrier.ts';
 import {
   HOUSE_SHARDS,
@@ -21,28 +22,9 @@ const OPENING = parseCash('1000000.00');
 const BTC_PRICE = 9_543_217n; // 95,432.17
 
 beforeEach(async () => {
-  await ctx.pool.query('ALTER TABLE entries DISABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM orders');
-  await ctx.pool.query('DELETE FROM entries');
-  await ctx.pool.query('ALTER TABLE entries ENABLE TRIGGER entries_no_delete');
-  await ctx.pool.query('DELETE FROM ledger_transactions');
-  await ctx.pool.query('DELETE FROM accounts');
+  await resetLedger(ctx.pool);
 
-  /**
-   * Reset the reference price too.
-   *
-   * Not defensive clutter — it was a real bug in this file. One test moves the
-   * BTC price to prove an existing order's frozen price does not follow it, and
-   * without this reset every later test priced its orders at 2x and funded
-   * accounts came up short. The symptom was "expected 2 to be 5" in a
-   * *concurrency* test, which is a long way from the cause.
-   *
-   * `instruments` is reference data that tests mutate, so it belongs in the
-   * reset like any other table.
-   */
-  await ctx.pool.query(`UPDATE instruments SET reference_price = $1::bigint WHERE symbol = 'BTC'`, [
-    BTC_PRICE.toString(),
-  ]);
+  await resetInstruments(ctx.pool);
 
   await ctx.pool.query(
     `INSERT INTO accounts (external_id, kind, asset_symbol, balance) VALUES
