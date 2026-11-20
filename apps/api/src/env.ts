@@ -143,6 +143,36 @@ const schema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(1_000),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
 
+  /**
+   * Tracing is **off by default**, including in production.
+   *
+   * Not an oversight. The tracing SDK is the component most likely to leak
+   * memory in this stack (see observability/tracing.ts), and a ledger that
+   * stops accepting orders because the thing watching it ran the box out of
+   * RAM is a worse outcome than having no waterfalls. It is turned on
+   * deliberately, when there is something to look at.
+   */
+  // `.default(false)` — the boolean, not the string `'false'`. In Zod 4 a
+  // default on a piped schema is the *output* type, so the string form is a
+  // type error rather than a silently-truthy default.
+  OTEL_ENABLED: boolish.default(false),
+
+  /**
+   * OTLP/HTTP, not OTLP/gRPC. gRPC means a second protocol stack and a
+   * `@grpc/grpc-js` dependency for a span volume that is a trickle at 2%
+   * sampling; HTTP/protobuf over localhost is not the bottleneck.
+   */
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: z.string().min(1).default('http://127.0.0.1:4318/v1/traces'),
+
+  /**
+   * Head sampling ratio. 0.02 by default — see the long note in
+   * observability/tracing.ts on why this cannot be "sample on error".
+   *
+   * Settable to 1 for a short debugging window, which is the actual workflow:
+   * raise it, reproduce, put it back.
+   */
+  OTEL_SAMPLE_RATIO: z.coerce.number().min(0).max(1).default(0.02),
+
   /** Comma-separated allowlist for CORS. Empty means same-origin only. */
   CORS_ORIGINS: z
     .string()

@@ -19,6 +19,8 @@ import { env } from './env.ts';
 import { logger } from './logging.ts';
 import { FlagHeaderError } from './flags.ts';
 import { requestContextPlugin } from './plugins/request-context.ts';
+import { metricsPlugin } from './plugins/metrics.ts';
+import { fastifyTracingPlugin } from './observability/tracing.ts';
 import { createDatabase, type Database } from './db/pool.ts';
 import { healthRoutes } from './routes/health.ts';
 import { accountRoutes } from './routes/accounts.ts';
@@ -143,7 +145,18 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
     app.log.error({ err, sqlstate: (err as { code?: string }).code ?? null }, 'idle client error');
   });
 
+  /**
+   * Registered first, and awaited.
+   *
+   * `@fastify/otel` wraps route handlers and lifecycle hooks as they are
+   * defined, so it has to be in place before any route or plugin that adds one.
+   * Registering it after the routes produces a server with no handler spans and
+   * no indication that anything is missing.
+   */
+  await app.register(fastifyTracingPlugin());
+
   await app.register(requestContextPlugin);
+  await app.register(metricsPlugin);
 
   await app.register(cors, {
     origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false,
@@ -173,7 +186,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
     // decide whether this instance is alive. Rate-limiting them means a traffic
     // spike gets an instance marked unhealthy and removed, which converts a
     // throughput problem into an outage.
-    allowList: (req) => req.url.startsWith('/health/'),
+    allowList: (req) => req.url.startsWith('/health/') || req.url === '/metrics',
   });
 
   await app.register(swagger, {
