@@ -156,7 +156,7 @@ export class UnbalancedTransactionError extends Error {
  * invocation, and it produces a message that names the problem rather than a
  * constraint name.
  */
-function validate(request: PostRequest): void {
+function validate(request: Pick<PostRequest, 'legs'>): void {
   if (request.legs.length < 2) {
     throw new UnbalancedTransactionError(sum(request.legs.map((l) => l.amount)));
   }
@@ -264,9 +264,6 @@ type AttemptOutcome =
   | { status: 'no_such_account'; accountId: bigint };
 
 async function attemptOnce(client: pg.PoolClient, request: PostRequest): Promise<AttemptOutcome> {
-  const accountIds = lockOrder(request.legs);
-  const net = netByAccount(request.legs);
-
   if (request.mode === 'serializable') {
     /**
      * Must be the first statement of the transaction: PostgreSQL rejects
@@ -280,99 +277,160 @@ async function attemptOnce(client: pg.PoolClient, request: PostRequest): Promise
   }
 
   try {
-    await acquire(client, request.mode, accountIds);
+    const outcome = await writeLegs(client, request);
 
-    const balances = await readBalances(client, accountIds);
-    for (const id of accountIds) {
-      if (!balances.has(id)) {
-        await client.query('ROLLBACK');
-        return { status: 'no_such_account', accountId: id };
-      }
+    if (outcome.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return outcome;
     }
-
-    for (const id of request.requireNonNegative ?? []) {
-      const after = (balances.get(id) ?? 0n) + (net.get(id) ?? 0n);
-      if (after < 0n) {
-        await client.query('ROLLBACK');
-        return {
-          status: 'insufficient_funds',
-          accountId: id,
-          available: balances.get(id) ?? 0n,
-          required: -(net.get(id) ?? 0n),
-        };
-      }
-    }
-
-    if (request.beforeWrite) await request.beforeWrite();
-
-    const { rows: header } = await client.query<{ id: bigint }>(
-      'INSERT INTO ledger_transactions (kind) VALUES ($1) RETURNING id',
-      [request.kind],
-    );
-    const transactionId = header[0]!.id;
-
-    /**
-     * All legs in one multi-row INSERT. Not a loop: each round trip is a network
-     * hop taken while holding every lock this transaction acquired, so a
-     * two-statement write holds locks for roughly twice as long as a one
-     * statement write and halves throughput under contention — for no reason.
-     */
-    await client.query(
-      `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
-       SELECT $1::bigint, a.account_id, a.amount,
-              CASE WHEN a.amount < 0 THEN 'debit' ELSE 'credit' END::entry_direction,
-              acc.unit
-         FROM unnest($2::bigint[], $3::bigint[]) AS a(account_id, amount)
-         JOIN accounts acc ON acc.id = a.account_id`,
-      [
-        transactionId.toString(),
-        request.legs.map((l) => l.accountId.toString()),
-        request.legs.map((l) => l.amount.toString()),
-      ],
-    );
-
-    /**
-     * The stored balance snapshot, updated in the same transaction as the
-     * entries it summarises. If this and the INSERT above could ever land
-     * separately, `accounts.balance` would drift from the ledger — which is the
-     * cost of keeping a snapshot at all, and why `account_derived_balances`
-     * exists to prove they agree.
-     *
-     * `balance + delta`, not an absolute value. Under `pessimistic` the row is
-     * already locked so either form is safe; under `serializable` the relative
-     * form is what lets SSI see the read-write dependency correctly. Writing an
-     * absolute computed in JavaScript is the Phase 1 lost-update bug, and it
-     * does not stop being that bug because a better isolation level is in force.
-     */
-    const updated = await client.query<{ id: bigint; balance: bigint }>(
-      `UPDATE accounts AS acc
-          SET balance = acc.balance + d.delta
-         FROM unnest($1::bigint[], $2::bigint[]) AS d(account_id, delta)
-        WHERE acc.id = d.account_id
-        RETURNING acc.id, acc.balance`,
-      [
-        [...net.keys()].map((id) => id.toString()),
-        [...net.values()].map((delta) => delta.toString()),
-      ],
-    );
 
     if (request.withinTransaction) {
-      await request.withinTransaction(client, transactionId);
+      await request.withinTransaction(client, outcome.transactionId);
     }
 
     await client.query('COMMIT');
-
-    return {
-      status: 'posted',
-      transactionId,
-      balances: new Map(updated.rows.map((r) => [r.id, r.balance])),
-    };
+    return outcome;
   } catch (err) {
     // ROLLBACK can itself fail if the connection died. Swallow that so the
     // original error — the useful one — is what propagates.
     await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   }
+}
+
+export type PostWithinRequest = Pick<
+  PostRequest,
+  'kind' | 'legs' | 'requireNonNegative' | 'mode' | 'beforeWrite'
+>;
+
+export type PostWithinOutcome = AttemptOutcome;
+
+/**
+ * Post one ledger transaction **inside a database transaction the caller
+ * already owns**. No `BEGIN`, no `COMMIT`, no retry.
+ *
+ * `post()` is one ledger transaction per database transaction, which is the
+ * right shape for an order against the house. The order book needs a different
+ * one: an incoming order can fill against several resting orders, each fill is
+ * its own balanced ledger transaction, and all of them have to commit or roll
+ * back together with the order rows that describe them. That is several ledger
+ * transactions in one database transaction — which the append-only trigger
+ * permits, because it compares `created_xid` and every header here is opened by
+ * the same database transaction that writes its entries.
+ *
+ * A refusal (`insufficient_funds`, `no_such_account`) is returned **before
+ * anything is written**, so the caller's transaction is still clean and it can
+ * carry on — cancel the order that could not be covered, try the next one —
+ * rather than having to roll back work it wants to keep.
+ *
+ * The caller owns three things `post()` otherwise provides:
+ *
+ *  - **Isolation.** `serializable` here acquires nothing, exactly as in
+ *    `post()`, and is only meaningful if the caller opened the transaction at
+ *    that level.
+ *  - **Lock order across calls.** Each call acquires its accounts in ascending
+ *    id order, but two calls in one transaction are not ordered relative to
+ *    each other. A caller making several must serialise itself some other way;
+ *    the matching engine does it with one advisory lock per market, taken first.
+ *  - **Retry.** A 40001 or 40P01 propagates to the caller, whose transaction it
+ *    aborts.
+ */
+export async function postWithin(
+  client: pg.PoolClient,
+  request: PostWithinRequest,
+): Promise<PostWithinOutcome> {
+  validate(request);
+  return writeLegs(client, request);
+}
+
+/**
+ * Steps 1–6 of the write path: acquire, read, check, header, entries, snapshot.
+ * Opens and closes nothing.
+ */
+async function writeLegs(
+  client: pg.PoolClient,
+  request: PostWithinRequest,
+): Promise<AttemptOutcome> {
+  const accountIds = lockOrder(request.legs);
+  const net = netByAccount(request.legs);
+
+  await acquire(client, request.mode, accountIds);
+
+  const balances = await readBalances(client, accountIds);
+  for (const id of accountIds) {
+    if (!balances.has(id)) return { status: 'no_such_account', accountId: id };
+  }
+
+  for (const id of request.requireNonNegative ?? []) {
+    const after = (balances.get(id) ?? 0n) + (net.get(id) ?? 0n);
+    if (after < 0n) {
+      return {
+        status: 'insufficient_funds',
+        accountId: id,
+        available: balances.get(id) ?? 0n,
+        required: -(net.get(id) ?? 0n),
+      };
+    }
+  }
+
+  if (request.beforeWrite) await request.beforeWrite();
+
+  const { rows: header } = await client.query<{ id: bigint }>(
+    'INSERT INTO ledger_transactions (kind) VALUES ($1) RETURNING id',
+    [request.kind],
+  );
+  const transactionId = header[0]!.id;
+
+  /**
+   * All legs in one multi-row INSERT. Not a loop: each round trip is a network
+   * hop taken while holding every lock this transaction acquired, so a
+   * two-statement write holds locks for roughly twice as long as a one
+   * statement write and halves throughput under contention — for no reason.
+   */
+  await client.query(
+    `INSERT INTO entries (transaction_id, account_id, amount, direction, unit)
+     SELECT $1::bigint, a.account_id, a.amount,
+            CASE WHEN a.amount < 0 THEN 'debit' ELSE 'credit' END::entry_direction,
+            acc.unit
+       FROM unnest($2::bigint[], $3::bigint[]) AS a(account_id, amount)
+       JOIN accounts acc ON acc.id = a.account_id`,
+    [
+      transactionId.toString(),
+      request.legs.map((l) => l.accountId.toString()),
+      request.legs.map((l) => l.amount.toString()),
+    ],
+  );
+
+  /**
+   * The stored balance snapshot, updated in the same transaction as the
+   * entries it summarises. If this and the INSERT above could ever land
+   * separately, `accounts.balance` would drift from the ledger — which is the
+   * cost of keeping a snapshot at all, and why `account_derived_balances`
+   * exists to prove they agree.
+   *
+   * `balance + delta`, not an absolute value. Under `pessimistic` the row is
+   * already locked so either form is safe; under `serializable` the relative
+   * form is what lets SSI see the read-write dependency correctly. Writing an
+   * absolute computed in JavaScript is the Phase 1 lost-update bug, and it
+   * does not stop being that bug because a better isolation level is in force.
+   */
+  const updated = await client.query<{ id: bigint; balance: bigint }>(
+    `UPDATE accounts AS acc
+        SET balance = acc.balance + d.delta
+       FROM unnest($1::bigint[], $2::bigint[]) AS d(account_id, delta)
+      WHERE acc.id = d.account_id
+      RETURNING acc.id, acc.balance`,
+    [
+      [...net.keys()].map((id) => id.toString()),
+      [...net.values()].map((delta) => delta.toString()),
+    ],
+  );
+
+  return {
+    status: 'posted',
+    transactionId,
+    balances: new Map(updated.rows.map((r) => [r.id, r.balance])),
+  };
 }
 
 /**
