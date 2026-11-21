@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource/atkinson-hyperlegible-next/400.css';
+@import '@fontsource/atkinson-hyperlegible-next/500.css';
+@import '@fontsource/atkinson-hyperlegible-next/600.css';
+@import '@fontsource/atkinson-hyperlegible-next/700.css';
+@import '@fontsource/atkinson-hyperlegible-mono/400.css';
+@import '@fontsource/atkinson-hyperlegible-mono/500.css';
+@import '@fontsource/atkinson-hyperlegible-mono/600.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@keyframes flash {
+  from {
+    background-color: var(--flash-color, var(--color-notice-wash));
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    font-family: var(--font-ui);
+    font-size: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+  html[data-theme='dark'] {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-size: var(--text-md);
+    line-height: 1.35;
+    min-width: 20rem;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+  ::selection {
+    background: var(--color-notice);
+    color: var(--color-on-notice);
+  }
+}
+
+@utility num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+/* stale band on a panel title: hatching, so the state does not rest on colour */
+@utility stale-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    var(--color-warning-wash) 6px 12px
+  );
+}

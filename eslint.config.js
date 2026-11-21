@@ -9,7 +9,6 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       'apps/api/drizzle/**',
-      'apps/web/src/routeTree.gen.ts',
       'infra/**/.terraform/**',
     ],
   },

@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -12,16 +11,7 @@ import { fileURLToPath } from 'node:url';
 const apiTarget = process.env['API_PROXY_TARGET'] ?? 'http://127.0.0.1:3000';
 
 export default defineConfig({
-  plugins: [
-    /*
-     * MUST come before the react plugin. The router plugin generates
-     * routeTree.gen.ts from the files in src/routes, and the react plugin would
-     * otherwise transform the stale tree from the previous run.
-     */
-    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
 
   resolve: {
     alias: {
@@ -32,19 +22,6 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-
-    fs: {
-      /*
-       * The Evidence page inlines `docs/evidence/*.md` via `import.meta.glob`,
-       * which is outside this app's root. Vite's dev server refuses to serve
-       * files outside the project root by default — correctly — so the repo
-       * root is allowed explicitly.
-       *
-       * This only affects the dev server. In a production build the markdown is
-       * already in the bundle, so nothing reads the filesystem at runtime.
-       */
-      allow: [fileURLToPath(new URL('../..', import.meta.url))],
-    },
 
     /*
      * The API is proxied rather than called cross-origin.

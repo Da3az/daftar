@@ -309,14 +309,21 @@ database is the dataset every number above was measured against.
 
 ## The UI
 
-Two pages. **Trade** is the live market: chart, order book, tape, and the order
-ticket. **Portfolio** is the guest's account: equity and profit, a cash panel
-(deposit, withdraw, send to another guest), the activity feed the outbox worker
-delivers to, and every fill and order.
+Three pages. **Trade** is the live market: chart, order book, latest trades and
+an order ticket that says in a sentence what the order will do before it is
+sent. **Portfolio** is the guest's account: what it is worth, what was put in and
+the profit or loss between them, each shown as a sum that adds up on screen, a
+cash panel (deposit, withdraw, send to another guest by handle) and the latest
+activity. **History** has every activity row, trade and order, and each opens a
+receipt with the balanced ledger lines behind it.
 
 Profit and loss is measured against what the guest has put in, net — read from
 the ledger — rather than against the fixed opening balance, so a deposit is not
 mistaken for a gain.
+
+A permanent band says it is play money. In development, `/dev/states` reaches
+every screen in every state against an in-memory mock (`?mock` switches to it);
+neither the mock nor that page is in a production build.
 
 The original seven "Ledger lab" pages have been removed from the interface. The
 API behind them — the legacy order path, the naive debit paths, the chaos burst
@@ -349,7 +356,7 @@ bash scripts/wal-restore-drill.sh                     # the recovery drill, self
 ## Stack, and where it deviates
 
 Node 26 (native TypeScript type-stripping, no transpiler), Fastify 5, Zod 4,
-Drizzle, **PostgreSQL 18**, React 19 + Vite, TanStack Router/Query, Tailwind 4,
+Drizzle, **PostgreSQL 18**, React 19 + Vite, React Router, TanStack Query, Radix, Tailwind 4,
 Vitest.
 
 **PostgreSQL 18 specifically**, for `DEFERRABLE INITIALLY DEFERRED` constraint
