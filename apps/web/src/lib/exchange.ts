@@ -83,6 +83,12 @@ export interface Me {
   participant: { displayName: string; kind: 'guest' | 'bot'; createdAt: string };
   symbol: string;
   startingCash: string;
+  /** Public code another guest uses to send this one cash. Safe to show. */
+  handle: string;
+  /** Opening credit plus deposits and transfers in, less withdrawals and transfers out. */
+  netContributed: string;
+  /** Events committed with this account's money that the feed has not shown yet. */
+  pendingEvents: number;
   balances: { cash: string; cashAvailable: string; asset: string; assetAvailable: string };
   openOrders: ExchangeOrder[];
 }
@@ -149,16 +155,20 @@ export const placeOrder = (
 ): Promise<{
   order: ExchangeOrder;
   fills: { price: string; quantity: string; notional: string }[];
-}> =>
-  apiRequest('/v1/exchange/orders', {
+}> => {
+  /*
+   * Generated per submission, and sent twice: as the order's own id, which a
+   * UNIQUE index scoped to this guest turns into "one order" on a double
+   * click, and as the `Idempotency-Key`, which lets a retry of this same
+   * request get the original answer back rather than a 409.
+   */
+  const clientOrderId = `web-${crypto.randomUUID()}`;
+
+  return apiRequest('/v1/exchange/orders', {
     method: 'POST',
+    headers: { 'idempotency-key': clientOrderId },
     body: {
-      /*
-       * Generated per submission. The server stores it under a UNIQUE index
-       * scoped to this guest, so a double-click is one order and a 409 rather
-       * than two orders.
-       */
-      clientOrderId: `web-${crypto.randomUUID()}`,
+      clientOrderId,
       side: input.side,
       type: input.type,
       quantity: input.quantity,
@@ -167,6 +177,7 @@ export const placeOrder = (
       ...(input.type === 'limit' ? { limitPrice: input.limitPrice } : {}),
     },
   });
+};
 
 export const cancelOrder = (clientOrderId: string): Promise<unknown> =>
   apiRequest(`/v1/exchange/orders/${encodeURIComponent(clientOrderId)}`, { method: 'DELETE' });
@@ -176,6 +187,69 @@ export const getOrders = (): Promise<{ orders: ExchangeOrder[] }> =>
 
 export const getFills = (): Promise<{ fills: Fill[] }> =>
   apiRequest('/v1/exchange/fills?limit=100');
+
+/* --------------------------------------------------------------------- cash */
+
+export interface DepositDelivery {
+  /** Which of the requested deliveries, from 1. */
+  delivery: number;
+  /** 0 for the first attempt; the provider re-delivers after a 409. */
+  retry: number;
+  status: number;
+  /** `processed`, `duplicate`, `in_progress`, or a rejection code. */
+  outcome: string;
+}
+
+export interface DepositResult {
+  depositId: string;
+  amount: string;
+  credited: boolean;
+  deliveries: DepositDelivery[];
+  summary: { processed: number; duplicates: number; inProgress: number; rejected: number };
+}
+
+/** `deliveries` is how many times the simulated provider sends the one event. */
+export const deposit = (input: { amount: string; deliveries: number }): Promise<DepositResult> =>
+  apiRequest('/v1/exchange/deposits', { method: 'POST', body: input });
+
+export interface MovementResult {
+  status: 'completed';
+  amount: string;
+  cashBalance: string;
+}
+
+export const withdraw = (amount: string): Promise<MovementResult> =>
+  apiRequest('/v1/exchange/withdrawals', {
+    method: 'POST',
+    body: { clientId: `web-${crypto.randomUUID()}`, amount },
+  });
+
+export const sendTransfer = (input: {
+  amount: string;
+  toHandle: string;
+}): Promise<MovementResult> =>
+  apiRequest('/v1/exchange/transfers', {
+    method: 'POST',
+    body: { clientId: `web-${crypto.randomUUID()}`, ...input },
+  });
+
+export interface ActivityEvent {
+  id: string;
+  /** e.g. `trade.buy`, `deposit.credited`, `transfer.received`. */
+  type: string;
+  occurredAt: string;
+  publishedAt: string;
+  amount: string | null;
+  symbol: string | null;
+  side: Side | null;
+  liquidity: 'maker' | 'taker' | null;
+  price: string | null;
+  quantity: string | null;
+  counterparty: string | null;
+}
+
+export const getActivity = (): Promise<{ pending: number; events: ActivityEvent[] }> =>
+  apiRequest('/v1/exchange/activity?limit=50');
 
 /* -------------------------------------------------------------------- hooks */
 

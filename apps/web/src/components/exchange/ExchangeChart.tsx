@@ -28,7 +28,12 @@ const INTERVALS: CandleInterval[] = ['1m', '5m', '1h'];
  * a 10,000.00 ceiling they are far inside what a double represents exactly. No
  * value read back out of the chart is ever used.
  *
- * `attributionLogo` stays on — see the note in `PriceChart.tsx`.
+ * `attributionLogo` stays on, deliberately. Lightweight Charts is Apache-2.0,
+ * and its one practical obligation is to reproduce the attribution notice and
+ * link to tradingview.com from a page users can see. The library's own docs
+ * state that leaving the attribution logo on satisfies the linking requirement
+ * — so it stays on, the repo ships a `NOTICE` file, and the footer links out
+ * as well.
  */
 export function ExchangeChart({ symbol }: { symbol: string }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);

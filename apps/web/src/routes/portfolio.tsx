@@ -18,6 +18,8 @@ import {
   useRefreshExchange,
   valueOf,
 } from '@/lib/exchange';
+import { ActivityFeed } from '@/components/exchange/ActivityFeed';
+import { CashPanel } from '@/components/exchange/CashPanel';
 import {
   Badge,
   Button,
@@ -86,16 +88,21 @@ function Portfolio(): React.JSX.Element {
     account && lastPrice !== undefined ? valueOf(account.balances.asset, lastPrice) : null;
   const cashMinor = account ? toMinor(account.balances.cash, CASH_SCALE) : null;
   const positionMinor = positionValue === null ? null : toMinor(positionValue, CASH_SCALE);
-  const startingMinor = account ? toMinor(account.startingCash, CASH_SCALE) : null;
+  /*
+   * What the guest has put in, net — not the fixed opening balance. Measured
+   * against the opening balance, a deposit would read as profit and a
+   * withdrawal as a loss.
+   */
+  const contributedMinor = account ? toMinor(account.netContributed, CASH_SCALE) : null;
 
   const equity =
     cashMinor === null || positionMinor === null
       ? null
       : fromMinor(cashMinor + positionMinor, CASH_SCALE);
   const profit =
-    cashMinor === null || positionMinor === null || startingMinor === null
+    cashMinor === null || positionMinor === null || contributedMinor === null
       ? null
-      : fromMinor(cashMinor + positionMinor - startingMinor, CASH_SCALE);
+      : fromMinor(cashMinor + positionMinor - contributedMinor, CASH_SCALE);
   const profitTone =
     profit === null
       ? 'text-ink-100'
@@ -131,7 +138,10 @@ function Portfolio(): React.JSX.Element {
         <Figure label="Equity" hint="Cash plus position at the last trade">
           {equity === null ? '—' : formatCash(equity)}
         </Figure>
-        <Figure label="Profit / loss" hint={`Against ${formatCash(account?.startingCash ?? '0')}`}>
+        <Figure
+          label="Profit / loss"
+          hint={`Against ${formatCash(account?.netContributed ?? '0')} put in, net`}
+        >
           <span className={profitTone}>{profit === null ? '—' : formatCash(profit)}</span>
         </Figure>
         <Figure
@@ -146,6 +156,11 @@ function Portfolio(): React.JSX.Element {
         >
           {account ? trimQuantity(account.balances.asset) : '—'}
         </Figure>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        {account && <CashPanel me={account} />}
+        <ActivityFeed enabled={signedIn} />
       </div>
 
       <Card>

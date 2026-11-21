@@ -4,10 +4,7 @@ import { cn } from '@/lib/cn';
 import { formatCash } from '@/lib/money';
 import { useMe } from '@/lib/exchange';
 
-/**
- * The exchange is the product; two pages cover it. The original seven live
- * under `/lab`, with their own navigation — see `routes/lab/route.tsx`.
- */
+/** The exchange is the product; two pages cover it. */
 const NAV = [
   { to: '/', label: 'Trade' },
   { to: '/portfolio', label: 'Portfolio' },
@@ -60,14 +57,6 @@ function RootLayout(): React.JSX.Element {
 
           <div className="ml-auto flex items-center gap-4">
             <AccountChip />
-            <Link
-              to="/lab"
-              activeProps={{ className: 'text-ink-100' }}
-              inactiveProps={{ className: 'text-ink-500 hover:text-ink-200' }}
-              className="text-xs transition-colors"
-            >
-              Ledger lab
-            </Link>
           </div>
         </div>
       </header>
@@ -93,8 +82,7 @@ function RootLayout(): React.JSX.Element {
             >
               TradingView Lightweight Charts
             </a>{' '}
-            (Apache-2.0). The ledger lab&apos;s charts use Binance public market data, for display
-            only.
+            (Apache-2.0).
           </p>
         </div>
       </footer>

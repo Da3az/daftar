@@ -49,7 +49,7 @@ negative; the other invents money.
 ```bash
 docker compose up -d db && npm run db:migrate
 npm test --workspace @daftar/api         # the race is deterministic, via a barrier
-DAFTAR_NAIVE_LOST_UPDATE=true npm run dev:api   # then fire the chaos panel at it
+DAFTAR_NAIVE_LOST_UPDATE=true npm run dev:api   # then POST /v1/chaos/burst at it
 ```
 
 ### 2. Three correct strategies, and they trade off differently than I predicted
@@ -257,6 +257,28 @@ reconcile against the money; here there is one copy.
 accounts are allowed to go negative, the way the house's are. Every coin a guest
 holds is a coin some bot is short.
 
+### What the exchange uses from the rest of this repository
+
+The order book started out using only the ledger. It now uses the parts that
+were built for the house path as well:
+
+| Feature                   | On the exchange                                                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Idempotency-Key`         | A retried order gets the original answer back — same order, same fills — instead of a 409. For an accepted order the response is recorded **inside the matching transaction**.             |
+| Webhooks                  | A deposit is a signed event from a simulated provider, delivered to the real `POST /v1/webhooks/simbank`. Ask for it to be delivered five times at once and it is credited once.           |
+| Outbox                    | Every guest fill, deposit, withdrawal and transfer commits an outbox row with the money. A worker publishes them to a per-guest activity feed, which can be late but cannot miss an event. |
+| Account locks, under load | Withdrawals and guest-to-guest transfers do **not** take the market lock, so they overlap fills on the same cash account. The ledger's sorted account locks are what keep them honest.     |
+
+Two things are deliberately still not used. The three concurrency strategies are
+not selectable on the exchange: everything there is `advisory`. And the naive
+paths have no exchange equivalent — they remain reachable through the legacy
+API and the test suite.
+
+Cash reserved by an open buy order cannot be withdrawn or sent, but that check
+reads the reservation without the market lock. The backstop is the ledger: a
+balance never goes negative, and a resting order that can no longer be covered
+is withdrawn by the matcher when it would have filled.
+
 **A bug the first live run found.** The bots rounded both bids and offers _down_
 to the tick. Flooring a bid moves it away from the mid; flooring an offer moves
 it toward the mid — so every pair of quotes sat half a tick low, the next mid
@@ -266,45 +288,40 @@ and offers round up. Over the next 6,900 trades the price stayed between 24.91
 and 25.33 with a 50.0% buy/sell split.
 
 **What this is not.** No fees, no margin, one market, no websocket (the screen
-polls once a second), and guest reservations are arithmetic over open orders
-rather than money moved into a hold account. The legacy API is still
+polls once a second), no real payment provider (deposits come from a simulated
+one), and guest reservations are arithmetic over open orders rather than money
+moved into a hold account. The legacy API is still
 unauthenticated and still mounted; it must not be exposed on a public
 deployment of this branch as it stands.
 
 ```bash
 npm run exchange:db:create      # a separate database: never the seeded one
 npm run exchange:db:migrate
-npm run dev:exchange            # API on :3000 with the bots trading
+npm run dev:exchange            # API on :3000 with the bots trading and the outbox worker running
 npm run dev:web                 # :5173
 ```
 
-The bots are **off by default** and the exchange gets its own database, for one
-reason: they write ledger entries around the clock, and the seeded database is
-the dataset every number above was measured against.
+The bots and the outbox worker are **off by default** and the exchange gets its
+own database, for one reason: they write around the clock, and the seeded
+database is the dataset every number above was measured against.
 
 ---
 
 ## The UI
 
-Two pages for the exchange — **Trade** and **Portfolio** — and the original
-seven under **Ledger lab** (`/lab`): Dashboard, House trade, Transactions,
-Account ledger (a T-account), Settlements, Chaos panel, Evidence. The rest of
-this section describes the lab pages.
+Two pages. **Trade** is the live market: chart, order book, tape, and the order
+ticket. **Portfolio** is the guest's account: equity and profit, a cash panel
+(deposit, withdraw, send to another guest), the activity feed the outbox worker
+delivers to, and every fill and order.
 
-**Prices shown on the chart are live market data, for display only.** No price
-displayed in this interface is ever written to the ledger. Orders are priced
-from a frozen reference price in the database, and the gap is shown rather than
-hidden — at the time of writing the live BTC price is around $59,300 and the
-frozen reference price is $95,432.17, both labelled on the Trade page.
+Profit and loss is measured against what the guest has put in, net — read from
+the ledger — rather than against the fixed opening balance, so a deposit is not
+mistaken for a gain.
 
-**The chaos panel fires its burst server-side**, not from the browser. A browser
-caps at 6 connections per origin on HTTP/1.1 and runs one JavaScript thread, so
-200 `fetch` calls from a page is a queue of 6 — the database would see six
-overlapping transactions, every invariant would hold, and the panel would be
-demonstrating the ledger surviving load that never happened. That would quietly
-discredit every other number here. The endpoint is token-gated with a 15-minute
-HMAC token, rate-limited per IP, hard-capped server-side, and writes only into a
-per-session demo tenant so a deliberate overdraft cannot touch measured data.
+The original seven "Ledger lab" pages have been removed from the interface. The
+API behind them — the legacy order path, the naive debit paths, the chaos burst
+endpoint, the statement and transaction reports — is unchanged and still
+exercised by the test suite and the load scripts.
 
 ---
 
@@ -360,9 +377,9 @@ Deviations from my usual defaults, and why:
 - **No authentication on the legacy API.** (The exchange has guest sessions; see
   above.) A deliberate scope decision: the subject is a correct
   ledger under concurrency, and a login would add a password-hashing capacity
-  constraint without making the ledger any more or less correct. The account
-  selector in the UI is a client-side view preference, and if this ever gained
-  real users that store is the thing to delete rather than secure.
+  constraint without making the ledger any more or less correct. The interface
+  no longer calls the legacy API at all; it remains for the benchmarks and
+  tests, and must not be exposed publicly as it stands.
 
 ---
 
@@ -399,8 +416,8 @@ load at the time and never revisited.
 - **Make the shard count configurable from the start.** `HOUSE_SHARDS = 16` is
   a hardcoded constant, so the fix for the current bottleneck needs a migration.
   It should have been a tunable with the number recorded in each evidence file.
-- **Build the chaos panel earlier.** It is the fastest way to reproduce a
-  concurrency bug by hand, and it existed only after most of them were already
+- **Build the chaos burst endpoint earlier.** It is the fastest way to reproduce
+  a concurrency bug by hand, and it existed only after most of them were already
   found the slow way.
 - **Measure backup throughput on representative storage.** The 57-second base
   backup for 35 MB is a btrfs artefact, and I reported it without characterising
