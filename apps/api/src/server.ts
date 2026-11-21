@@ -42,6 +42,21 @@ const pool = createPool({ connectionString: env.DATABASE_URL, applicationName: '
 const app = await buildApp({ pool });
 
 /**
+ * The bots, when this deployment has asked for them. Started after the app is
+ * built so they log through the same logger, and before `listen` only in the
+ * sense that neither waits for the other — the runner campaigns for its leader
+ * lock in the background and never blocks boot.
+ */
+const bots = env.EXCHANGE_BOTS_ENABLED
+  ? (await import('./exchange/bots.ts')).startBots(pool, {
+      symbol: (await import('./exchange/engine.ts')).DEFAULT_MARKET,
+      count: env.EXCHANGE_BOT_COUNT,
+      meanIntervalMs: env.EXCHANGE_BOT_MEAN_INTERVAL_MS,
+      log: app.log,
+    })
+  : null;
+
+/**
  * Graceful shutdown, in the order that matters: stop accepting connections and
  * drain in-flight requests first, *then* close the pool. Closing the pool first
  * would fail every request that is mid-transaction, which during a rolling
@@ -57,6 +72,8 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     await app.close();
+    // Before the pool: an in-flight bot order is a transaction on it.
+    await bots?.stop();
     await pool.end();
     // Last, and after the pool: flushing spans needs the export to finish, and
     // the final spans are the ones describing the requests that were still

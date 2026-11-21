@@ -28,6 +28,7 @@ import { orderRoutes } from './routes/orders.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { reportRoutes } from './routes/reports.ts';
 import { chaosRoutes } from './routes/chaos.ts';
+import { exchangeRoutes } from './routes/exchange.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
 declare module 'fastify' {
@@ -267,6 +268,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   await app.register(webhookRoutes);
   await app.register(reportRoutes);
   await app.register(chaosRoutes);
+  await app.register(exchangeRoutes);
 
   return app;
 }

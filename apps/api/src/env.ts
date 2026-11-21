@@ -186,6 +186,52 @@ const schema = z.object({
   // `.default(false)` — the boolean, not the string `'false'`. In Zod 4 a
   // default on a piped schema is the *output* type, so the string form is a
   // type error rather than a silently-truthy default.
+  /**
+   * Signing key for guest session cookies on the exchange.
+   *
+   * Its own secret, for the reason `CHAOS_TOKEN_SECRET` is: rotating it logs
+   * every guest out, and that must not also invalidate webhook signatures.
+   *
+   * Required in production. With a published fallback anyone can mint a cookie
+   * for any guest id they can name.
+   */
+  GUEST_SESSION_SECRET: z.string().min(16).optional(),
+
+  /**
+   * Guest accounts one IP may create per hour.
+   *
+   * Each one is two accounts, a participant and a funded ledger transaction
+   * that — `entries` being append-only — can never be removed. An unbounded
+   * "enter as guest" button is a way to grow the ledger for free.
+   */
+  EXCHANGE_GUEST_RATE_MAX: z.coerce.number().int().min(1).default(20),
+
+  /**
+   * Run the market-making bots in this process.
+   *
+   * **Off by default**, and that default is load-bearing: the bots write real
+   * ledger entries continuously, and a development database holding the seeded
+   * dataset is the thing every evidence file was measured against. Bots are
+   * something a deployment opts into, against a database meant for them.
+   *
+   * Safe to enable on more than one instance: the runner holds a session
+   * advisory lock, so exactly one of them trades.
+   */
+  EXCHANGE_BOTS_ENABLED: boolish.default(false),
+
+  /** How many bots. The first run creates their accounts. */
+  EXCHANGE_BOT_COUNT: z.coerce.number().int().min(1).max(64).default(12),
+
+  /**
+   * Mean pause between one bot's actions, in milliseconds. Each pause is drawn
+   * uniformly from 0.5x to 1.5x of this.
+   *
+   * This is the knob for how fast the ledger grows. At the default, twelve bots
+   * act about three times a second between them, and well under half of those
+   * actions trade.
+   */
+  EXCHANGE_BOT_MEAN_INTERVAL_MS: z.coerce.number().int().min(100).default(4_000),
+
   OTEL_ENABLED: boolish.default(false),
 
   /**
@@ -225,11 +271,12 @@ type RawEnv = z.infer<typeof schema>;
  */
 export type Env = Omit<
   RawEnv,
-  'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET' | 'CHAOS_TOKEN_SECRET'
+  'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET' | 'CHAOS_TOKEN_SECRET' | 'GUEST_SESSION_SECRET'
 > & {
   ALLOW_FLAG_HEADERS: boolean;
   WEBHOOK_SIGNING_SECRET: string;
   CHAOS_TOKEN_SECRET: string;
+  GUEST_SESSION_SECRET: string;
 };
 
 function load(source: NodeJS.ProcessEnv): Env {
@@ -267,6 +314,12 @@ function load(source: NodeJS.ProcessEnv): Env {
     process.exit(78);
   }
 
+  // And again: a known cookie-signing key is no session at all.
+  if (env.NODE_ENV === 'production' && env.GUEST_SESSION_SECRET === undefined) {
+    process.stderr.write('\nGUEST_SESSION_SECRET is required when NODE_ENV=production.\n\n');
+    process.exit(78);
+  }
+
   // Defaulting one field from another cannot be expressed inside the schema
   // without making the field's type optional at every use site, so it happens
   // here, once, where both values are known.
@@ -276,6 +329,7 @@ function load(source: NodeJS.ProcessEnv): Env {
     WEBHOOK_SIGNING_SECRET:
       env.WEBHOOK_SIGNING_SECRET ?? 'whsec_development_only_not_a_real_secret',
     CHAOS_TOKEN_SECRET: env.CHAOS_TOKEN_SECRET ?? 'chaos_development_only_not_a_real_secret',
+    GUEST_SESSION_SECRET: env.GUEST_SESSION_SECRET ?? 'guest_development_only_not_a_real_secret',
   };
 }
 

@@ -117,6 +117,28 @@ export const ordersTotal = new Counter({
 });
 
 /**
+ * Order-book orders by side, type and outcome. Bounded: 2 × 2 × 9.
+ *
+ * Bots and guests are counted together and distinguished by `actor`, a
+ * two-value label — never by participant, for the reason nothing here is
+ * labelled by account.
+ */
+export const exchangeOrdersTotal = new Counter({
+  name: 'daftar_exchange_orders_total',
+  help: 'Order-book orders by actor kind, side, type and outcome.',
+  labelNames: ['actor', 'side', 'type', 'outcome'],
+  registers: [registry],
+});
+
+/** Fills produced by the matching engine, by the aggressor's side. */
+export const exchangeTradesTotal = new Counter({
+  name: 'daftar_exchange_trades_total',
+  help: 'Trades matched, by taker side.',
+  labelNames: ['taker_side'],
+  registers: [registry],
+});
+
+/**
  * Ledger retries by SQLSTATE and concurrency mode.
  *
  * SQLSTATE is the label that makes this worth having: 40001
