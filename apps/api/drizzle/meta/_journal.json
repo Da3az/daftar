@@ -92,6 +92,13 @@
       "when": 1795500000000,
       "tag": "0012_exchange_cash",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0013_exchange_receipts",
+      "breakpoints": true
     }
   ]
 }

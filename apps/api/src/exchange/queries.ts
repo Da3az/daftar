@@ -293,6 +293,8 @@ export interface FillView {
   quantity: bigint;
   notional: bigint;
   createdAt: string;
+  /** The other side's display name. Never an id or a handle. */
+  counterparty: string | null;
 }
 
 /**
@@ -300,7 +302,10 @@ export interface FillView {
  *
  * Two indexed branches rather than one `JOIN ... ON o.id IN (taker, maker)`:
  * an `IN` across two columns cannot use either order index, so the single-join
- * form scans `trades`.
+ * form scans `trades`. Each branch is limited on its own before the union, and
+ * the counterparty is joined only to the rows that survive the outer limit —
+ * otherwise every fill the participant ever had would be joined to find the
+ * newest few.
  */
 export async function listFills(
   pool: pg.Pool,
@@ -317,20 +322,33 @@ export async function listFills(
     quantity: bigint;
     notional: bigint;
     created_at: string;
+    counterparty: string | null;
   }>(
-    `SELECT * FROM (
-       SELECT t.id AS trade_id, o.external_id AS order_external_id, t.symbol, o.side,
-              'taker' AS liquidity, t.price, t.quantity, t.notional, t.created_at
-         FROM book_orders o JOIN trades t ON t.taker_order_id = o.id
-        WHERE o.participant_id = $1::bigint
-       UNION ALL
-       SELECT t.id, o.external_id, t.symbol, o.side,
-              'maker', t.price, t.quantity, t.notional, t.created_at
-         FROM book_orders o JOIN trades t ON t.maker_order_id = o.id
-        WHERE o.participant_id = $1::bigint
-     ) AS fills
-     ORDER BY trade_id DESC
-     LIMIT $2::int`,
+    `SELECT f.*, cp.display_name AS counterparty
+       FROM (
+         SELECT * FROM (
+           (SELECT t.id AS trade_id, o.external_id AS order_external_id, t.symbol, o.side,
+                   'taker' AS liquidity, t.price, t.quantity, t.notional, t.created_at,
+                   t.maker_order_id AS other_order_id
+              FROM book_orders o JOIN trades t ON t.taker_order_id = o.id
+             WHERE o.participant_id = $1::bigint
+             ORDER BY t.id DESC
+             LIMIT $2::int)
+           UNION ALL
+           (SELECT t.id, o.external_id, t.symbol, o.side,
+                   'maker', t.price, t.quantity, t.notional, t.created_at,
+                   t.taker_order_id
+              FROM book_orders o JOIN trades t ON t.maker_order_id = o.id
+             WHERE o.participant_id = $1::bigint
+             ORDER BY t.id DESC
+             LIMIT $2::int)
+         ) AS both_sides
+         ORDER BY trade_id DESC
+         LIMIT $2::int
+       ) AS f
+       LEFT JOIN book_orders other ON other.id = f.other_order_id
+       LEFT JOIN participants cp ON cp.id = other.participant_id
+      ORDER BY f.trade_id DESC`,
     [participantId.toString(), limit],
   );
 
@@ -344,6 +362,7 @@ export async function listFills(
     quantity: r.quantity,
     notional: r.notional,
     createdAt: r.created_at,
+    counterparty: r.counterparty,
   }));
 }
 

@@ -348,6 +348,7 @@ export const webhookRoutes: FastifyPluginAsyncZod = async (app) => {
             fundAccount(app, {
               accountExternalId: payload.accountId!,
               amount: payload.amount!,
+              objectId: payload.objectId,
               eventRowId: outcome.id,
               mode: request.ctx.flags.concurrencyMode,
             }),
@@ -518,6 +519,8 @@ async function fundAccount(
   input: {
     accountExternalId: string;
     amount: string;
+    /** The provider's object id; on the exchange, the deposit id. */
+    objectId: string;
     eventRowId: bigint;
     mode: 'pessimistic' | 'serializable' | 'advisory';
   },
@@ -564,7 +567,8 @@ async function fundAccount(
         transactionId,
         accountId: customer,
         eventType: 'deposit.credited',
-        payload: { amount: amountMinor.toString() },
+        // `depositId` is what the guest's receipt is keyed by.
+        payload: { amount: amountMinor.toString(), depositId: input.objectId },
       });
     },
   });

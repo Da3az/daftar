@@ -6,7 +6,7 @@ import { env } from '../src/env.ts';
 import { useTestDatabase } from './support/test-database.ts';
 import { resetLedger } from './support/reset.ts';
 import { DEFAULT_MARKET, placeBookOrder } from '../src/exchange/engine.ts';
-import { FUNDING_EXTERNAL_ID, netContributed, transfer, withdraw } from '../src/exchange/cash.ts';
+import { FUNDING_EXTERNAL_ID, contributionsOf, transfer, withdraw } from '../src/exchange/cash.ts';
 import {
   GUEST_STARTING_CASH,
   createGuest,
@@ -309,19 +309,23 @@ describe('withdrawals', () => {
     expect(await balanceOf(g.externalId)).toBe(GUEST_STARTING_CASH);
   });
 
-  it('turns a repeated client id into a 409, not a second withdrawal', async () => {
+  it('replays a repeated client id instead of making a second withdrawal', async () => {
     const g = await guest();
-    const payload = { clientId: nextId(), amount: '100.00' };
-    const send = () =>
+    const clientId = nextId();
+    const send = (amount: string) =>
       app.inject({
         method: 'POST',
         url: '/v1/exchange/withdrawals',
         headers: { cookie: g.cookie },
-        payload,
+        payload: { clientId, amount },
       });
 
-    expect((await send()).statusCode).toBe(201);
-    expect((await send()).statusCode).toBe(409);
+    expect((await send('100.00')).statusCode).toBe(201);
+    expect((await send('100.00')).statusCode).toBe(200);
+    // The same id for a different movement is a conflict, not a replay.
+    const different = await send('101.00');
+    expect(different.statusCode).toBe(409);
+    expect(different.json<{ error: string }>().error).toBe('duplicate_movement');
     expect(await balanceOf(g.externalId)).toBe(GUEST_STARTING_CASH - parseCash('100.00'));
   });
 });
@@ -560,8 +564,386 @@ describe('net contributions', () => {
       quantity: parseQuantity('1.00000000'),
     });
 
-    expect(await netContributed(ctx.pool, a.cashAccountId)).toBe(
-      GUEST_STARTING_CASH - parseCash('100.00') + parseCash('30.00'),
+    const parts = await contributionsOf(ctx.pool, a.cashAccountId);
+    expect(parts).toEqual({
+      openingCredit: GUEST_STARTING_CASH,
+      deposits: 0n,
+      transfersIn: parseCash('30.00'),
+      withdrawals: parseCash('100.00'),
+      transfersOut: 0n,
+      net: GUEST_STARTING_CASH - parseCash('100.00') + parseCash('30.00'),
+    });
+  });
+});
+
+/*
+ * The fields the redesigned screens read: movement receipts, the recipient
+ * lookup, rate-limit timing, deposit balance and timing, fill counterparties,
+ * the contribution breakdown, and the ledger lines behind each feed row.
+ */
+describe('the receipt contract', () => {
+  const worker = () => ({
+    pool: ctx.pool,
+    publish: activityPublisher(ctx.pool),
+    shards: allShards(),
+    workerId: 'test',
+  });
+
+  const nameOf = async (externalId: string): Promise<string> => {
+    const { rows } = await ctx.pool.query<{ display_name: string }>(
+      'SELECT display_name FROM participants WHERE external_id = $1',
+      [externalId],
     );
+    return rows[0]!.display_name;
+  };
+
+  it('answers a retried withdrawal with the original result, even when the cash is gone', async () => {
+    const g = await guest();
+    const clientId = nextId();
+    const send = () =>
+      app.inject({
+        method: 'POST',
+        url: '/v1/exchange/withdrawals',
+        headers: { cookie: g.cookie },
+        payload: { clientId, amount: '10000.00' },
+      });
+
+    const first = await send();
+    expect(first.statusCode).toBe(201);
+    const original = first.json<{ clientId: string; occurredAt: string; cashBalance: string }>();
+    expect(original.clientId).toBe(clientId);
+    expect(original.cashBalance).toBe('0.00');
+    expect(Number.isNaN(Date.parse(original.occurredAt))).toBe(false);
+
+    // Re-checked against today's balance, this would be insufficient_funds.
+    const retry = await send();
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual(original);
+    expect(await balanceOf(g.externalId)).toBe(0n);
+  });
+
+  it('echoes the client id on a transfer and refuses its reuse for another recipient', async () => {
+    const a = await guest();
+    const b = await guest();
+    const c = await guest();
+    const clientId = nextId();
+    const send = (toHandle: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/v1/exchange/transfers',
+        headers: { cookie: a.cookie },
+        payload: { clientId, amount: '5.00', toHandle },
+      });
+
+    const first = await send(b.handle);
+    expect(first.statusCode).toBe(201);
+    expect(first.json<{ clientId: string }>().clientId).toBe(clientId);
+    expect((await send(b.handle)).statusCode).toBe(200);
+    expect((await send(c.handle)).statusCode).toBe(409);
+    expect(await balanceOf(c.externalId)).toBe(GUEST_STARTING_CASH);
+  });
+
+  it('looks up a guest by handle, and only a guest', async () => {
+    const a = await guest();
+    const b = await guest();
+    const { rows } = await ctx.pool.query<{ handle: string }>(
+      'SELECT handle FROM participants WHERE external_id = $1',
+      [bots[0]!],
+    );
+    const look = (handle: string, cookie: string | null = a.cookie) =>
+      app.inject({
+        method: 'GET',
+        url: `/v1/exchange/recipients/${handle}`,
+        headers: cookie === null ? {} : { cookie },
+      });
+
+    const found = await look(b.handle);
+    expect(found.statusCode).toBe(200);
+    // Nothing beyond what a transfer would reveal.
+    expect(found.json()).toEqual({ handle: b.handle, displayName: b.displayName });
+
+    expect((await look(rows[0]!.handle)).statusCode).toBe(404);
+    expect((await look(a.handle)).json<{ error: string }>().error).toBe('self_transfer');
+    expect((await look('NOT-A-HANDLE')).statusCode).toBe(400);
+    expect((await look(b.handle, null)).statusCode).toBe(401);
+  });
+
+  it('says when a rate limit frees, in the body and the header', async () => {
+    const a = await guest();
+    const b = await guest();
+
+    let limited: Awaited<ReturnType<typeof app.inject>> | null = null;
+    for (let i = 0; i < 40 && limited === null; i += 1) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/v1/exchange/recipients/${b.handle}`,
+        headers: { cookie: a.cookie },
+      });
+      if (response.statusCode === 429) limited = response;
+    }
+
+    expect(limited).not.toBeNull();
+    const body = limited!.json<{ error: string; retryAfterSeconds: number }>();
+    expect(body.error).toBe('rate_limited');
+    expect(body.retryAfterSeconds).toBe(Number(limited!.headers['retry-after']));
+    expect(body.retryAfterSeconds).toBeGreaterThan(0);
+  });
+
+  it('times a deposit refused by the hourly limit', async () => {
+    const g = await guest();
+    await ctx.pool.query(
+      `INSERT INTO deposits (participant_id, external_id, event_id, amount, deliveries)
+       SELECT $1::bigint, 'dep_t' || n, 'evt_t' || n, 100, 1 FROM generate_series(1, 10) n`,
+      [g.id.toString()],
+    );
+
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/v1/exchange/deposits',
+      headers: { cookie: g.cookie },
+      payload: { amount: '1.00' },
+    });
+
+    expect(refused.statusCode).toBe(429);
+    const body = refused.json<{ error: string; retryAfterSeconds: number }>();
+    expect(body.error).toBe('deposit_limit');
+    expect(body.retryAfterSeconds).toBeGreaterThan(3500);
+    expect(body.retryAfterSeconds).toBeLessThanOrEqual(3600);
+    expect(Number(refused.headers['retry-after'])).toBe(body.retryAfterSeconds);
+  });
+
+  it('reports the cash a deposit left and how long each delivery took', async () => {
+    const g = await guest();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/exchange/deposits',
+      headers: { cookie: g.cookie },
+      payload: { amount: '250.00', deliveries: 3 },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json<{ cashBalance: string; deliveries: { latencyMs: number }[] }>();
+    expect(body.cashBalance).toBe('10250.00');
+    for (const d of body.deliveries) {
+      expect(Number.isInteger(d.latencyMs)).toBe(true);
+      expect(d.latencyMs).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('names the other side of each fill, bot or guest', async () => {
+    const a = await guest();
+    const b = await guest();
+
+    await placeBookOrder(ctx.pool, {
+      externalId: `${bots[0]!}:${nextId()}`,
+      participantExternalId: bots[0]!,
+      symbol: DEFAULT_MARKET,
+      side: 'sell',
+      type: 'limit',
+      quantity: parseQuantity('2.00000000'),
+      limitPrice: parseCash('25.00'),
+    });
+    // b needs a coin before it can offer one.
+    await placeBookOrder(ctx.pool, {
+      externalId: `${b.externalId}:${nextId()}`,
+      participantExternalId: b.externalId,
+      symbol: DEFAULT_MARKET,
+      side: 'buy',
+      type: 'market',
+      quantity: parseQuantity('1.00000000'),
+    });
+    await placeBookOrder(ctx.pool, {
+      externalId: `${b.externalId}:${nextId()}`,
+      participantExternalId: b.externalId,
+      symbol: DEFAULT_MARKET,
+      side: 'sell',
+      type: 'limit',
+      quantity: parseQuantity('1.00000000'),
+      limitPrice: parseCash('25.01'),
+    });
+    await placeBookOrder(ctx.pool, {
+      externalId: `${a.externalId}:${nextId()}`,
+      participantExternalId: a.externalId,
+      symbol: DEFAULT_MARKET,
+      side: 'buy',
+      type: 'market',
+      quantity: parseQuantity('2.00000000'),
+    });
+
+    const fills = (
+      await app.inject({ method: 'GET', url: '/v1/exchange/fills', headers: { cookie: a.cookie } })
+    ).json<{ fills: { price: string; counterparty: string | null }[] }>().fills;
+
+    const bot = await nameOf(bots[0]!);
+    expect(fills.map((f) => [f.price, f.counterparty]).sort()).toEqual([
+      ['25.00', bot],
+      ['25.01', b.displayName],
+    ]);
+
+    // The maker sees the taker; and b's own earlier buy names the bot.
+    const theirs = (
+      await app.inject({ method: 'GET', url: '/v1/exchange/fills', headers: { cookie: b.cookie } })
+    ).json<{ fills: { counterparty: string | null }[] }>().fills;
+    expect(theirs.map((f) => f.counterparty)).toEqual([a.displayName, bot]);
+  });
+
+  it('names guests without any bits of the session id', async () => {
+    const g = await guest();
+    expect(g.displayName).toMatch(/^Guest [0-9A-F]{4}$/);
+    expect(g.externalId).toMatch(/^guest-[0-9a-f]{16}$/);
+  });
+
+  it('breaks netContributed into parts that add up, on /me', async () => {
+    const a = await guest();
+    const b = await guest();
+    const post = (url: string, cookie: string, payload: object) =>
+      app.inject({ method: 'POST', url, headers: { cookie }, payload });
+
+    await post('/v1/exchange/deposits', a.cookie, { amount: '250.00' });
+    await post('/v1/exchange/withdrawals', a.cookie, { clientId: nextId(), amount: '100.00' });
+    await post('/v1/exchange/transfers', b.cookie, {
+      clientId: nextId(),
+      amount: '30.00',
+      toHandle: a.handle,
+    });
+    await post('/v1/exchange/transfers', a.cookie, {
+      clientId: nextId(),
+      amount: '20.00',
+      toHandle: b.handle,
+    });
+
+    const me = (
+      await app.inject({ method: 'GET', url: '/v1/exchange/me', headers: { cookie: a.cookie } })
+    ).json<{ netContributed: string; contributions: Record<string, string> }>();
+
+    expect(me.contributions).toEqual({
+      openingCredit: '10000.00',
+      deposits: '250.00',
+      transfersIn: '30.00',
+      withdrawals: '100.00',
+      transfersOut: '20.00',
+    });
+    expect(me.netContributed).toBe('10160.00');
+  });
+
+  it('returns balanced ledger lines and the right reference for every event type', async () => {
+    const a = await guest();
+    const b = await guest();
+    const orderId = nextId();
+    const withdrawalId = nextId();
+    const transferId = nextId();
+    const post = (url: string, cookie: string, payload: object, headers = {}) =>
+      app.inject({ method: 'POST', url, headers: { cookie, ...headers }, payload });
+
+    await placeBookOrder(ctx.pool, {
+      externalId: `${bots[0]!}:${nextId()}`,
+      participantExternalId: bots[0]!,
+      symbol: DEFAULT_MARKET,
+      side: 'sell',
+      type: 'limit',
+      quantity: parseQuantity('2.00000000'),
+      limitPrice: parseCash('25.00'),
+    });
+    expect(
+      (
+        await post(
+          '/v1/exchange/orders',
+          a.cookie,
+          { clientOrderId: orderId, type: 'market', side: 'buy', quantity: '2.00000000' },
+          { 'idempotency-key': orderId },
+        )
+      ).statusCode,
+    ).toBe(201);
+    const deposit = (await post('/v1/exchange/deposits', a.cookie, { amount: '40.00' })).json<{
+      depositId: string;
+    }>();
+    await post('/v1/exchange/withdrawals', a.cookie, { clientId: withdrawalId, amount: '7.00' });
+    await post('/v1/exchange/transfers', a.cookie, {
+      clientId: transferId,
+      amount: '3.00',
+      toHandle: b.handle,
+    });
+
+    await drainOnce(worker());
+
+    type Event = {
+      type: string;
+      reference: string | null;
+      counterparty: string | null;
+      entries: { account: string; direction: string; amount: string; unit: string }[];
+    };
+    const feed = async (cookie: string) =>
+      (
+        await app.inject({ method: 'GET', url: '/v1/exchange/activity', headers: { cookie } })
+      ).json<{ events: Event[] }>().events;
+
+    const mine = await feed(a.cookie);
+    const byType = new Map(mine.map((e) => [e.type, e]));
+
+    expect(byType.get('trade.buy')!.reference).toBe(orderId);
+    expect(byType.get('trade.buy')!.counterparty).toBe(await nameOf(bots[0]!));
+    expect(byType.get('deposit.credited')!.reference).toBe(deposit.depositId);
+    expect(byType.get('withdrawal.completed')!.reference).toBe(withdrawalId);
+    expect(byType.get('transfer.sent')!.reference).toBe(transferId);
+
+    // A buy takes cash out of the buyer's account: a debit, as the screen says.
+    expect(byType.get('trade.buy')!.entries).toContainEqual({
+      account: 'Your cash',
+      direction: 'debit',
+      amount: '50.00',
+      unit: 'USD',
+    });
+    expect(byType.get('trade.buy')!.entries).toContainEqual({
+      account: 'Your DFT',
+      direction: 'credit',
+      amount: '2.00000000',
+      unit: 'DFT',
+    });
+    expect(byType.get('deposit.credited')!.entries).toContainEqual({
+      account: 'Payment provider · clearing',
+      direction: 'debit',
+      amount: '40.00',
+      unit: 'USD',
+    });
+    expect(byType.get('withdrawal.completed')!.entries).toContainEqual({
+      account: 'Outside world',
+      direction: 'credit',
+      amount: '7.00',
+      unit: 'USD',
+    });
+
+    const theirs = await feed(b.cookie);
+    expect(theirs).toHaveLength(1);
+    expect(theirs[0]!.type).toBe('transfer.received');
+    // The sender's id embeds the sender's session subject; never the recipient's to see.
+    expect(theirs[0]!.reference).toBeNull();
+    expect(theirs[0]!.entries).toContainEqual({
+      account: `${a.displayName} · cash`,
+      direction: 'debit',
+      amount: '3.00',
+      unit: 'USD',
+    });
+
+    for (const event of [...mine, ...theirs]) {
+      expect(event.entries.length).toBeGreaterThan(0);
+      const net = new Map<string, bigint>();
+      for (const line of event.entries) {
+        // No account id, house shard name or session subject in any label.
+        expect(line.account).not.toMatch(/guest-|house:|external:/);
+        const scaled = BigInt(line.amount.replace('.', ''));
+        net.set(
+          line.unit,
+          (net.get(line.unit) ?? 0n) + (line.direction === 'debit' ? -scaled : scaled),
+        );
+      }
+      for (const total of net.values()) expect(total).toBe(0n);
+    }
+
+    // A row from before the feed kept its ledger link: no lines, no reference.
+    await ctx.pool.query('UPDATE exchange_activity SET transaction_id = NULL');
+    const unlinked = await feed(a.cookie);
+    const trade = unlinked.find((e) => e.type === 'trade.buy')!;
+    expect(trade.entries).toEqual([]);
+    expect(trade.reference).toBeNull();
   });
 });

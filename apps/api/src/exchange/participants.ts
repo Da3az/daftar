@@ -116,7 +116,9 @@ async function insertParticipant(
 export async function createGuest(pool: pg.Pool): Promise<Participant> {
   const suffix = randomBytes(8).toString('hex');
   const externalId = `guest-${suffix}`;
-  const displayName = `Guest ${suffix.slice(-4).toUpperCase()}`;
+  // Its own random bytes, never a slice of `suffix`: the name is shown to every
+  // guest this one trades with, and must not carry any bits of the session id.
+  const displayName = `Guest ${randomBytes(2).toString('hex').toUpperCase()}`;
 
   const client = await pool.connect();
   try {

@@ -195,6 +195,7 @@ type Refusal = Exclude<PlaceBookOrderResult, { status: 'accepted' }>;
 interface Taker {
   id: bigint;
   kind: ParticipantKind;
+  displayName: string;
   cashAccountId: bigint;
   assetAccountId: bigint;
   cashBalance: bigint;
@@ -205,6 +206,7 @@ interface RestingOrder {
   id: bigint;
   participant_id: bigint;
   participant_kind: ParticipantKind;
+  participant_name: string;
   limit_price: bigint;
   remaining: bigint;
   cash_account_id: bigint;
@@ -264,12 +266,13 @@ async function loadTaker(
   const { rows } = await client.query<{
     id: bigint;
     kind: ParticipantKind;
+    display_name: string;
     cash_account_id: bigint;
     cash_balance: bigint;
     asset_account_id: bigint;
     asset_balance: bigint;
   }>(
-    `SELECT p.id, p.kind,
+    `SELECT p.id, p.kind, p.display_name,
             cash.id       AS cash_account_id,
             cash.balance  AS cash_balance,
             asset.id      AS asset_account_id,
@@ -287,6 +290,7 @@ async function loadTaker(
   return {
     id: row.id,
     kind: row.kind,
+    displayName: row.display_name,
     cashAccountId: row.cash_account_id,
     assetAccountId: row.asset_account_id,
     cashBalance: row.cash_balance,
@@ -378,7 +382,8 @@ async function nextResting(
   const buying = takerSide === 'buy';
 
   const { rows } = await client.query<RestingOrder>(
-    `SELECT o.id, o.participant_id, p.kind AS participant_kind, o.limit_price,
+    `SELECT o.id, o.participant_id, p.kind AS participant_kind,
+            p.display_name AS participant_name, o.limit_price,
             o.quantity - o.filled_quantity AS remaining,
             p.cash_account_id,
             asset.id AS asset_account_id
@@ -635,10 +640,20 @@ export async function placeBookOrder(
          * write thousands of rows a day to say so.
          */
         const sides = [
-          { party: buyer, side: 'buy' as const, liquidity: buying ? 'taker' : 'maker' },
-          { party: seller, side: 'sell' as const, liquidity: buying ? 'maker' : 'taker' },
+          {
+            party: buyer,
+            side: 'buy' as const,
+            liquidity: buying ? 'taker' : 'maker',
+            counterparty: buying ? maker.participant_name : taker.displayName,
+          },
+          {
+            party: seller,
+            side: 'sell' as const,
+            liquidity: buying ? 'maker' : 'taker',
+            counterparty: buying ? taker.displayName : maker.participant_name,
+          },
         ];
-        for (const { party, side, liquidity } of sides) {
+        for (const { party, side, liquidity, counterparty } of sides) {
           if (!party.limited) continue;
           await enqueue(client, {
             transactionId: outcome.transactionId,
@@ -651,6 +666,8 @@ export async function placeBookOrder(
               price: price.toString(),
               quantity: quantity.toString(),
               notional: cash.toString(),
+              // The other side's display name — never an id or a handle.
+              counterparty,
             },
           });
         }

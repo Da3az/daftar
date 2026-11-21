@@ -1,6 +1,6 @@
 import Fastify, { LogController, type FastifyError, type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { normalizeIP } from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import {
@@ -184,7 +184,10 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW_MS,
     // Trust the proxy's client address only where trustProxy is also on.
-    keyGenerator: (req) => req.ip,
+    // Normalised as the plugin's default key is: an IPv6 client is keyed by its
+    // /64, which one connection can rotate through freely, and an IPv4-mapped
+    // address by its IPv4 form.
+    keyGenerator: (req) => normalizeIP(req.ip),
     // Health checks are what a load balancer and a container orchestrator use to
     // decide whether this instance is alive. Rate-limiting them means a traffic
     // spike gets an instance marked unhealthy and removed, which converts a
@@ -249,6 +252,25 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
     }
 
     const status = error.statusCode ?? 500;
+
+    /*
+     * A rate-limit refusal, from `@fastify/rate-limit`. Its own body says only
+     * "retry in 1 minute"; this one names the condition and says when, in
+     * seconds, copied from the `Retry-After` header the plugin set before it
+     * threw (Fastify keeps headers on the error path).
+     */
+    if (status === 429) {
+      const retryAfter = Number(reply.getHeader('retry-after'));
+      reply.status(429).send({
+        error: 'rate_limited',
+        message: error.message,
+        ...(Number.isFinite(retryAfter) && retryAfter >= 0
+          ? { retryAfterSeconds: Math.ceil(retryAfter) }
+          : {}),
+      });
+      return;
+    }
+
     if (status >= 500) {
       app.log.error({ err: error, sqlstate: ctx.sqlstate }, 'unhandled error');
       reply.status(status).send({ error: 'internal_error', message: 'internal error' });

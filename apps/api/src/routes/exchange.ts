@@ -25,8 +25,12 @@ import {
 import {
   MAX_CASH_MOVEMENT,
   ensureFundingAccount,
+  findMovement,
+  findRecipient,
+  ledgerLinesFor,
   listActivity,
-  netContributed,
+  ownReferencesFor,
+  contributionsOf,
   pendingActivity,
   transfer,
   withdraw,
@@ -65,11 +69,32 @@ import {
  * inside, formatted by `@daftar/money` on the way out.
  */
 
-/** Orders one IP may place or cancel per minute. Generous for a person. */
+/**
+ * Orders one IP may place per minute, and — separately — cancels. Each route
+ * has its own counter: `@fastify/rate-limit` gives every route a store of its
+ * own, so the two do not share a budget. Generous for a person.
+ */
 const ORDER_RATE_MAX = 120;
 
-/** Withdrawals and transfers one IP may make per minute. */
+/**
+ * Deposits, withdrawals and transfers one IP may make per minute — each, not
+ * together, for the same reason.
+ */
 const CASH_RATE_MAX = 30;
+
+/** Recipient lookups one IP may make per minute. Its own budget, so typing a
+ * handle wrong does not use up the sends. */
+const LOOKUP_RATE_MAX = 30;
+
+/**
+ * Public market data, per IP per minute, per route.
+ *
+ * Its own limit rather than the global one: the screen polls the market and the
+ * candles once a second each, so a few tabs behind one address — or everyone
+ * behind one proxy — would otherwise spend the global budget the session routes
+ * need. 600 is ten tabs.
+ */
+const MARKET_RATE_MAX = 600;
 
 /** The route name an order's `Idempotency-Key` is scoped to. */
 const ORDER_ROUTE = 'POST /v1/exchange/orders';
@@ -125,6 +150,17 @@ const clientOrderIdOf = (participantExternalId: string, stored: string): string 
   stored.startsWith(`${participantExternalId}:`)
     ? stored.slice(participantExternalId.length + 1)
     : stored;
+
+/**
+ * The strict form, for anything not already filtered to the viewer's own rows:
+ * `null` unless the stored id carries the viewer's own prefix. The lenient one
+ * above returns a foreign id unchanged — which, for another guest's row, would
+ * hand out that guest's session subject.
+ */
+const ownClientIdOf = (participantExternalId: string, stored: string): string | null =>
+  stored.startsWith(`${participantExternalId}:`)
+    ? stored.slice(participantExternalId.length + 1)
+    : null;
 
 const PlaceOrderBody = z.discriminatedUnion('type', [
   z
@@ -190,7 +226,13 @@ const MovementBody = {
 const MovementOut = z.object({
   status: z.literal('completed'),
   amount: CashAmountOut,
-  cashBalance: CashAmountOut,
+  cashBalance: CashAmountOut.describe(
+    'The cash the movement left. On a replay, the figure the original request got.',
+  ),
+  clientId: z.string().describe('Echo of the client id, which keys the receipt.'),
+  occurredAt: z
+    .string()
+    .describe('When the money moved: the database clock at the start of its transaction.'),
 });
 
 const ActivityOut = z.object({
@@ -207,7 +249,33 @@ const ActivityOut = z.object({
   liquidity: z.enum(['maker', 'taker']).nullable(),
   price: CashAmountOut.nullable(),
   quantity: QuantityOut.nullable(),
-  counterparty: z.string().nullable(),
+  counterparty: z
+    .string()
+    .nullable()
+    .describe('The other side’s display name, for trades and transfers.'),
+  reference: z
+    .string()
+    .nullable()
+    .describe(
+      'The id a receipt is found by: the order’s `clientOrderId` for a trade, the ' +
+        '`clientId` for a withdrawal or a transfer sent, the `depositId` for a deposit. ' +
+        'NULL for a transfer received — the sender’s id is not the recipient’s to see.',
+    ),
+  entries: z
+    .array(
+      z.object({
+        account: z.string().describe('A display label, never an account id.'),
+        direction: z
+          .enum(['debit', 'credit'])
+          .describe('A debit takes value out of the account; a credit puts it in.'),
+        amount: z.string().describe('Exact decimal string in `unit`.'),
+        unit: z.string().describe('`USD`, or the market symbol.'),
+      }),
+    )
+    .describe(
+      'The balanced ledger transaction behind the event: per unit, debits equal credits. ' +
+        'Empty for an event older than the link from feed to ledger.',
+    ),
 });
 
 const ErrorOut = z.object({
@@ -216,6 +284,11 @@ const ErrorOut = z.object({
   unit: z.string().optional(),
   available: z.string().optional(),
   required: z.string().optional(),
+  retryAfterSeconds: z
+    .number()
+    .int()
+    .optional()
+    .describe('On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.'),
 });
 
 const UNAUTHENTICATED = {
@@ -260,6 +333,60 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
     status: order.status,
     cancelReason: order.cancelReason,
   });
+
+  /**
+   * The answer to a withdrawal or transfer whose client id was already used.
+   *
+   * Same movement → the original result, with a 200 rather than a 201, so the
+   * client can tell a replay from a new movement as it does for orders. A
+   * different movement under the same id → 409. `null` when the id is unused.
+   */
+  const replayMovement = async (
+    request: FastifyRequest,
+    participant: { id: bigint; externalId: string; cashAccountId: bigint },
+    clientId: string,
+    expected: { kind: 'withdrawal' | 'transfer'; amount: bigint; toHandle: string | null },
+  ) => {
+    const stored = await timed(request, () =>
+      findMovement(app.pool, participant.id, storedOrderId(participant.externalId, clientId)),
+    );
+    if (!stored) return null;
+
+    const same =
+      stored.kind === expected.kind &&
+      stored.amount === expected.amount &&
+      stored.counterpartyHandle === expected.toHandle;
+    if (!same) {
+      return {
+        status: 409 as const,
+        body: {
+          error: 'duplicate_movement',
+          message: `${clientId} was already used for a different movement`,
+        },
+      };
+    }
+
+    // Movements made before `balance_after` existed fall back to today's cash.
+    let balance = stored.balanceAfter;
+    if (balance === null) {
+      const { rows } = await app.pool.query<{ balance: bigint }>(
+        'SELECT balance FROM accounts WHERE id = $1::bigint',
+        [participant.cashAccountId.toString()],
+      );
+      balance = rows[0]?.balance ?? 0n;
+    }
+
+    return {
+      status: 200 as const,
+      body: {
+        status: 'completed' as const,
+        amount: formatCash(stored.amount),
+        cashBalance: formatCash(balance),
+        clientId,
+        occurredAt: stored.createdAt,
+      },
+    };
+  };
 
   /* ---------------------------------------------------------------- session */
 
@@ -346,6 +473,18 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
             'Opening credit plus deposits and transfers in, less withdrawals and transfers ' +
               'out. Profit and loss is equity minus this.',
           ),
+          contributions: z
+            .object({
+              openingCredit: CashAmountOut,
+              deposits: CashAmountOut,
+              transfersIn: CashAmountOut,
+              withdrawals: CashAmountOut,
+              transfersOut: CashAmountOut,
+            })
+            .describe(
+              'The parts of `netContributed`, read in the same statement, so ' +
+                'openingCredit + deposits + transfersIn − withdrawals − transfersOut = netContributed.',
+            ),
           pendingEvents: z
             .number()
             .int()
@@ -369,7 +508,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         Promise.all([
           getBalances(app.pool, participant, symbol),
           listOrders(app.pool, participant.id, { openOnly: true, limit: 100 }),
-          netContributed(app.pool, participant.cashAccountId),
+          contributionsOf(app.pool, participant.cashAccountId),
           pendingActivity(app.pool, participant.cashAccountId),
         ]),
       );
@@ -383,7 +522,14 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         symbol,
         startingCash: formatCash(GUEST_STARTING_CASH),
         handle: participant.handle,
-        netContributed: formatCash(contributed),
+        netContributed: formatCash(contributed.net),
+        contributions: {
+          openingCredit: formatCash(contributed.openingCredit),
+          deposits: formatCash(contributed.deposits),
+          transfersIn: formatCash(contributed.transfersIn),
+          withdrawals: formatCash(contributed.withdrawals),
+          transfersOut: formatCash(contributed.transfersOut),
+        },
         pendingEvents,
         balances: {
           cash: formatCash(balances.cash),
@@ -405,6 +551,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.route({
     method: 'GET',
     url: '/v1/exchange/market',
+    config: { rateLimit: { max: MARKET_RATE_MAX, timeWindow: 60_000 } },
     schema: {
       tags: ['exchange'],
       summary: 'One market: rules, last price, 24h stats, order book and tape.',
@@ -515,6 +662,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.route({
     method: 'GET',
     url: '/v1/exchange/candles',
+    config: { rateLimit: { max: MARKET_RATE_MAX, timeWindow: 60_000 } },
     schema: {
       tags: ['exchange'],
       summary: 'OHLC candles, aggregated from trades on read.',
@@ -939,6 +1087,10 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
               side: z.enum(['buy', 'sell']),
               liquidity: z.enum(['maker', 'taker']),
               createdAt: z.string(),
+              counterparty: z
+                .string()
+                .nullable()
+                .describe('The other side’s display name, e.g. a bot’s "Kestrel".'),
             }),
           ),
         }),
@@ -967,6 +1119,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
           quantity: formatQuantity(f.quantity),
           notional: formatCash(f.notional),
           createdAt: f.createdAt,
+          counterparty: f.counterparty,
         })),
       };
     },
@@ -1017,6 +1170,15 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
               outcome: z
                 .string()
                 .describe('`processed`, `duplicate`, `in_progress`, or a rejection code.'),
+              latencyMs: z
+                .number()
+                .int()
+                .nonnegative()
+                .describe(
+                  'Milliseconds from dispatch to the webhook’s answer, for this attempt alone ' +
+                    '(a retry’s back-off is not included). The first wave is sent at once, so ' +
+                    'its times include waiting on each other.',
+                ),
             }),
           ),
           summary: z.object({
@@ -1025,6 +1187,11 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
             inProgress: z.number().int(),
             rejected: z.number().int(),
           }),
+          cashBalance: CashAmountOut.describe(
+            'The account’s cash, read after every delivery settled. It can include another ' +
+              'movement that landed at the same moment, so it is not always the old ' +
+              'balance plus this deposit.',
+          ),
         }),
         401: ErrorOut,
         422: ErrorOut,
@@ -1057,10 +1224,27 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       );
 
       if (recent[0]!.recent >= MAX_DEPOSITS_PER_HOUR) {
+        /*
+         * When a slot frees: the hour after the deposit that would have to age
+         * out. That is the MAX-th newest, not the oldest — the count-then-insert
+         * above can race and leave more than MAX rows in the window.
+         */
+        const { rows: frees } = await app.pool.query<{ seconds: number | null }>(
+          `SELECT ceil(extract(epoch FROM created_at + interval '1 hour' - now()))::int AS seconds
+             FROM deposits
+            WHERE participant_id = $1::bigint
+            ORDER BY created_at DESC
+            OFFSET $2::int LIMIT 1`,
+          [participant.id.toString(), MAX_DEPOSITS_PER_HOUR - 1],
+        );
+        const retryAfterSeconds = Math.max(1, frees[0]?.seconds ?? 1);
+
         reply.status(429);
+        reply.header('retry-after', String(retryAfterSeconds));
         return {
           error: 'deposit_limit',
           message: `at most ${String(MAX_DEPOSITS_PER_HOUR)} deposits per hour`,
+          retryAfterSeconds,
         };
       }
 
@@ -1093,13 +1277,14 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         'utf8',
       );
 
-      const deliver = async (): Promise<{ status: number; outcome: string }> => {
+      const deliver = async (): Promise<{ status: number; outcome: string; latencyMs: number }> => {
         // Signed per delivery, with a fresh timestamp — as Stripe documents for
         // its own retries.
         const timestamp = Math.floor(Date.now() / 1000);
         const signature = computeSignature(env.WEBHOOK_SIGNING_SECRET, timestamp, raw);
 
         // In-process: no network call, and nowhere to point it but this server.
+        const started = performance.now();
         const response = await app.inject({
           method: 'POST',
           url: '/v1/webhooks/simbank',
@@ -1113,6 +1298,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
           },
           payload: raw,
         });
+        const latencyMs = Math.max(0, Math.round(performance.now() - started));
 
         let parsed: { received?: boolean; state?: string; duplicate?: boolean; error?: string } =
           {};
@@ -1129,7 +1315,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
               : (parsed.state ?? 'unknown')
             : (parsed.error ?? 'error');
 
-        return { status: response.statusCode, outcome };
+        return { status: response.statusCode, outcome, latencyMs };
       };
 
       // All at once: `Promise.all` over already-created promises, so the
@@ -1157,10 +1343,18 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       const duplicates = countOf('duplicate');
       const inProgress = countOf('in_progress');
 
+      // After every delivery has answered, so a credit that happened is in it.
+      const { rows: cash } = await timed(request, () =>
+        app.pool.query<{ balance: bigint }>('SELECT balance FROM accounts WHERE id = $1::bigint', [
+          participant.cashAccountId.toString(),
+        ]),
+      );
+
       reply.status(201);
       return {
         depositId,
         amount: formatCash(amount),
+        cashBalance: formatCash(cash[0]?.balance ?? 0n),
         credited: processed > 0,
         deliveries: log,
         summary: {
@@ -1188,7 +1382,14 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         'money. Cash reserved by open buy orders cannot be withdrawn.',
       ].join('\n'),
       body: z.object(MovementBody).strict(),
-      response: { 201: MovementOut, 401: ErrorOut, 409: ErrorOut, 422: ErrorOut },
+      response: {
+        201: MovementOut,
+        200: MovementOut.describe('A replay: this client id was already this withdrawal.'),
+        401: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        429: ErrorOut,
+      },
     },
     handler: async (request, reply) => {
       const participant = await authenticate(app.pool, request);
@@ -1198,6 +1399,15 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       const { clientId, amount } = request.body;
+      const expected = { kind: 'withdrawal' as const, amount, toHandle: null };
+
+      // Before any check: a retry of a withdrawal that happened is answered
+      // with what happened, not re-judged against the balance it left.
+      const replay = await replayMovement(request, participant, clientId, expected);
+      if (replay) {
+        reply.status(replay.status);
+        return replay.body;
+      }
 
       if (amount > MAX_CASH_MOVEMENT) {
         reply.status(422);
@@ -1223,6 +1433,8 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
             status: 'completed' as const,
             amount: formatCash(amount),
             cashBalance: formatCash(result.balanceAfter),
+            clientId,
+            occurredAt: result.occurredAt,
           };
         }
 
@@ -1244,6 +1456,12 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         request.ctx.sqlstate = code ?? null;
 
         if (code === UNIQUE_VIOLATION) {
+          // Two identical requests raced and the other committed first.
+          const raced = await replayMovement(request, participant, clientId, expected);
+          if (raced) {
+            reply.status(raced.status);
+            return raced.body;
+          }
           reply.status(409);
           return { error: 'duplicate_movement', message: `${clientId} was already submitted` };
         }
@@ -1278,7 +1496,15 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
             .describe('The recipient’s handle.'),
         })
         .strict(),
-      response: { 201: MovementOut, 401: ErrorOut, 404: ErrorOut, 409: ErrorOut, 422: ErrorOut },
+      response: {
+        201: MovementOut,
+        200: MovementOut.describe('A replay: this client id was already this transfer.'),
+        401: ErrorOut,
+        404: ErrorOut,
+        409: ErrorOut,
+        422: ErrorOut,
+        429: ErrorOut,
+      },
     },
     handler: async (request, reply) => {
       const participant = await authenticate(app.pool, request);
@@ -1288,6 +1514,13 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       const { clientId, amount, toHandle } = request.body;
+      const expected = { kind: 'transfer' as const, amount, toHandle };
+
+      const replay = await replayMovement(request, participant, clientId, expected);
+      if (replay) {
+        reply.status(replay.status);
+        return replay.body;
+      }
 
       if (amount > MAX_CASH_MOVEMENT) {
         reply.status(422);
@@ -1315,6 +1548,8 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
               status: 'completed' as const,
               amount: formatCash(amount),
               cashBalance: formatCash(result.balanceAfter),
+              clientId,
+              occurredAt: result.occurredAt,
             };
 
           case 'unknown_recipient':
@@ -1340,11 +1575,69 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         request.ctx.sqlstate = code ?? null;
 
         if (code === UNIQUE_VIOLATION) {
+          // Two identical requests raced and the other committed first.
+          const raced = await replayMovement(request, participant, clientId, expected);
+          if (raced) {
+            reply.status(raced.status);
+            return raced.body;
+          }
           reply.status(409);
           return { error: 'duplicate_movement', message: `${clientId} was already submitted` };
         }
         throw err;
       }
+    },
+  });
+
+  app.route({
+    method: 'GET',
+    url: '/v1/exchange/recipients/:handle',
+    config: { rateLimit: { max: LOOKUP_RATE_MAX, timeWindow: 60_000 } },
+    schema: {
+      tags: ['exchange'],
+      summary: 'Who a handle belongs to, before sending them cash.',
+      description: [
+        'Answers with the display name a transfer would show anyway, and nothing',
+        'more. Guests only: a bot cannot be paid, so it cannot be found either.',
+        '',
+        'Rate-limited on its own budget, separate from the transfers, so a',
+        'mistyped handle does not use up the sends.',
+      ].join('\n'),
+      params: z.object({
+        handle: z
+          .string()
+          .regex(/^[0-9a-f]{10}$/, 'must be a 10-character handle')
+          .describe('The recipient’s handle.'),
+      }),
+      response: {
+        200: z.object({ handle: z.string(), displayName: z.string() }),
+        401: ErrorOut,
+        404: ErrorOut,
+        422: ErrorOut,
+        429: ErrorOut,
+      },
+    },
+    handler: async (request, reply) => {
+      const participant = await authenticate(app.pool, request);
+      if (!participant) {
+        reply.status(401);
+        return UNAUTHENTICATED;
+      }
+
+      const { handle } = request.params;
+
+      if (handle === participant.handle) {
+        reply.status(422);
+        return { error: 'self_transfer', message: 'that handle is your own' };
+      }
+
+      const recipient = await timed(request, () => findRecipient(app.pool, handle));
+      if (!recipient) {
+        reply.status(404);
+        return { error: 'unknown_recipient', message: `no guest with handle ${handle}` };
+      }
+
+      return { handle: recipient.handle, displayName: recipient.displayName };
     },
   });
 
@@ -1387,6 +1680,15 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         ]),
       );
 
+      // Two batched reads for the whole page, never one per row.
+      const linked = events.flatMap((e) => (e.transactionId === null ? [] : [e.transactionId]));
+      const [lines, refs] = await timed(request, () =>
+        Promise.all([
+          ledgerLinesFor(app.pool, participant, events),
+          ownReferencesFor(app.pool, participant, linked),
+        ]),
+      );
+
       /*
        * Outbox payloads carry amounts as minor-unit integer strings — the
        * bigint's own digits. They are formatted here, at the boundary, like
@@ -1396,6 +1698,15 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       const minor = (value: unknown): bigint | null =>
         typeof value === 'string' && /^-?\d+$/.test(value) ? BigInt(value) : null;
       const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+      const referenceOf = (event: (typeof events)[number]): string | null => {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        if (event.eventType === 'transfer.received') return null;
+        if (event.eventType.startsWith('deposit.')) return text(payload['depositId']);
+        if (event.transactionId === null) return null;
+        const stored = refs.get(event.transactionId);
+        return stored === undefined ? null : ownClientIdOf(participant.externalId, stored);
+      };
 
       return {
         pending,
@@ -1425,6 +1736,16 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
             price: price === null ? null : formatCash(price),
             quantity: quantity === null ? null : formatQuantity(quantity),
             counterparty: text(payload['counterparty']),
+            reference: referenceOf(event),
+            entries: (event.transactionId === null
+              ? []
+              : (lines.get(event.transactionId) ?? [])
+            ).map((line) => ({
+              account: line.account,
+              direction: line.direction,
+              amount: line.unit === 'USD' ? formatCash(line.amount) : formatQuantity(line.amount),
+              unit: line.unit,
+            })),
           };
         }),
       };

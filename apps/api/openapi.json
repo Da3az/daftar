@@ -2580,6 +2580,50 @@
                       "description": "Opening credit plus deposits and transfers in, less withdrawals and transfers out. Profit and loss is equity minus this.",
                       "example": "1000.00"
                     },
+                    "contributions": {
+                      "type": "object",
+                      "properties": {
+                        "openingCredit": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "deposits": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "transfersIn": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "withdrawals": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "transfersOut": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        }
+                      },
+                      "required": [
+                        "openingCredit",
+                        "deposits",
+                        "transfersIn",
+                        "withdrawals",
+                        "transfersOut"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The parts of `netContributed`, read in the same statement, so openingCredit + deposits + transfersIn − withdrawals − transfersOut = netContributed."
+                    },
                     "pendingEvents": {
                       "type": "integer",
                       "minimum": -9007199254740991,
@@ -2710,6 +2754,7 @@
                     "startingCash",
                     "handle",
                     "netContributed",
+                    "contributions",
                     "pendingEvents",
                     "balances",
                     "openOrders"
@@ -2740,6 +2785,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3073,6 +3124,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3623,6 +3680,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3655,6 +3718,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3687,6 +3756,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3719,6 +3794,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3884,6 +3965,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3963,6 +4050,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -3995,6 +4088,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4027,6 +4126,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4115,6 +4220,13 @@
                           },
                           "createdAt": {
                             "type": "string"
+                          },
+                          "counterparty": {
+                            "description": "The other side’s display name, e.g. a bot’s \"Kestrel\".",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -4126,7 +4238,8 @@
                           "symbol",
                           "side",
                           "liquidity",
-                          "createdAt"
+                          "createdAt",
+                          "counterparty"
                         ],
                         "additionalProperties": false
                       }
@@ -4161,6 +4274,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4255,13 +4374,20 @@
                           "outcome": {
                             "type": "string",
                             "description": "`processed`, `duplicate`, `in_progress`, or a rejection code."
+                          },
+                          "latencyMs": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Milliseconds from dispatch to the webhook’s answer, for this attempt alone (a retry’s back-off is not included). The first wave is sent at once, so its times include waiting on each other."
                           }
                         },
                         "required": [
                           "delivery",
                           "retry",
                           "status",
-                          "outcome"
+                          "outcome",
+                          "latencyMs"
                         ],
                         "additionalProperties": false
                       }
@@ -4297,6 +4423,12 @@
                         "rejected"
                       ],
                       "additionalProperties": false
+                    },
+                    "cashBalance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "The account’s cash, read after every delivery settled. It can include another movement that landed at the same moment, so it is not always the old balance plus this deposit.",
+                      "example": "1000.00"
                     }
                   },
                   "required": [
@@ -4304,7 +4436,8 @@
                     "amount",
                     "credited",
                     "deliveries",
-                    "summary"
+                    "summary",
+                    "cashBalance"
                   ],
                   "additionalProperties": false
                 }
@@ -4332,6 +4465,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4364,6 +4503,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4396,6 +4541,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4449,6 +4600,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "A replay: this client id was already this withdrawal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "completed"
+                      ]
+                    },
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "cashBalance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "The cash the movement left. On a replay, the figure the original request got.",
+                      "example": "1000.00"
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "description": "Echo of the client id, which keys the receipt."
+                    },
+                    "occurredAt": {
+                      "type": "string",
+                      "description": "When the money moved: the database clock at the start of its transaction."
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "amount",
+                    "cashBalance",
+                    "clientId",
+                    "occurredAt"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A replay: this client id was already this withdrawal."
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -4471,14 +4669,24 @@
                     "cashBalance": {
                       "type": "string",
                       "pattern": "^-?\\d+(\\.\\d+)?$",
-                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "description": "The cash the movement left. On a replay, the figure the original request got.",
                       "example": "1000.00"
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "description": "Echo of the client id, which keys the receipt."
+                    },
+                    "occurredAt": {
+                      "type": "string",
+                      "description": "When the money moved: the database clock at the start of its transaction."
                     }
                   },
                   "required": [
                     "status",
                     "amount",
-                    "cashBalance"
+                    "cashBalance",
+                    "clientId",
+                    "occurredAt"
                   ],
                   "additionalProperties": false
                 }
@@ -4506,6 +4714,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4538,6 +4752,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4570,6 +4790,50 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4629,6 +4893,53 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "A replay: this client id was already this transfer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "completed"
+                      ]
+                    },
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "cashBalance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "The cash the movement left. On a replay, the figure the original request got.",
+                      "example": "1000.00"
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "description": "Echo of the client id, which keys the receipt."
+                    },
+                    "occurredAt": {
+                      "type": "string",
+                      "description": "When the money moved: the database clock at the start of its transaction."
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "amount",
+                    "cashBalance",
+                    "clientId",
+                    "occurredAt"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A replay: this client id was already this transfer."
+                }
+              }
+            }
+          },
           "201": {
             "description": "Default Response",
             "content": {
@@ -4651,14 +4962,24 @@
                     "cashBalance": {
                       "type": "string",
                       "pattern": "^-?\\d+(\\.\\d+)?$",
-                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "description": "The cash the movement left. On a replay, the figure the original request got.",
                       "example": "1000.00"
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "description": "Echo of the client id, which keys the receipt."
+                    },
+                    "occurredAt": {
+                      "type": "string",
+                      "description": "When the money moved: the database clock at the start of its transaction."
                     }
                   },
                   "required": [
                     "status",
                     "amount",
-                    "cashBalance"
+                    "cashBalance",
+                    "clientId",
+                    "occurredAt"
                   ],
                   "additionalProperties": false
                 }
@@ -4686,6 +5007,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4718,6 +5045,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4750,6 +5083,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4782,6 +5121,248 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/recipients/{handle}": {
+      "get": {
+        "summary": "Who a handle belongs to, before sending them cash.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Answers with the display name a transfer would show anyway, and nothing\nmore. Guests only: a bot cannot be paid, so it cannot be found either.\n\nRate-limited on its own budget, separate from the transfers, so a\nmistyped handle does not use up the sends.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{10}$"
+            },
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "description": "The recipient’s handle."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
@@ -4920,10 +5501,54 @@
                             ]
                           },
                           "counterparty": {
+                            "description": "The other side’s display name, for trades and transfers.",
                             "type": [
                               "string",
                               "null"
                             ]
+                          },
+                          "reference": {
+                            "description": "The id a receipt is found by: the order’s `clientOrderId` for a trade, the `clientId` for a withdrawal or a transfer sent, the `depositId` for a deposit. NULL for a transfer received — the sender’s id is not the recipient’s to see.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "entries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "account": {
+                                  "type": "string",
+                                  "description": "A display label, never an account id."
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "debit",
+                                    "credit"
+                                  ],
+                                  "description": "A debit takes value out of the account; a credit puts it in."
+                                },
+                                "amount": {
+                                  "type": "string",
+                                  "description": "Exact decimal string in `unit`."
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "description": "`USD`, or the market symbol."
+                                }
+                              },
+                              "required": [
+                                "account",
+                                "direction",
+                                "amount",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "The balanced ledger transaction behind the event: per unit, debits equal credits. Empty for an event older than the link from feed to ledger."
                           }
                         },
                         "required": [
@@ -4937,7 +5562,9 @@
                           "liquidity",
                           "price",
                           "quantity",
-                          "counterparty"
+                          "counterparty",
+                          "reference",
+                          "entries"
                         ],
                         "additionalProperties": false
                       }
@@ -4973,6 +5600,12 @@
                     },
                     "required": {
                       "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "required": [

@@ -26,6 +26,9 @@ import { allShards, drainOnce, reap, reclaimStale, type Publisher } from './work
  * arrive twice — after a crash between publishing and settling — and the second
  * arrival is a no-op.
  *
+ * The ledger transaction id is copied too: the outbox row is reaped after a
+ * day, and the feed row is how a receipt finds its ledger lines afterwards.
+ *
  * An event for an account that is not a participant's cash account (a legacy
  * customer, say) inserts nothing and is still published: this feed has no
  * reader for it, and leaving it pending would stall its shard.
@@ -35,8 +38,8 @@ export const activityPublisher =
   async (event) => {
     await pool.query(
       `INSERT INTO exchange_activity
-         (participant_id, outbox_event_id, event_type, payload, occurred_at)
-       SELECT p.id, o.id, o.event_type, o.payload, o.created_at
+         (participant_id, outbox_event_id, event_type, payload, occurred_at, transaction_id)
+       SELECT p.id, o.id, o.event_type, o.payload, o.created_at, o.transaction_id
          FROM outbox o
          JOIN participants p ON p.cash_account_id = o.account_id
         WHERE o.id = $1::bigint
