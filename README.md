@@ -220,10 +220,76 @@ explicit list of what is **not** built.
 
 ---
 
+## The beta exchange
+
+Everything above measures one shape of order: a customer against the house, at a
+price read from a table. The `beta-exchange` branch adds the other shape — a
+live order book for one made-up coin, **DFT** — on the same ledger.
+
+- **A real book.** Limit and market orders, price-time priority, partial fills.
+  A fill is priced at the resting order's limit price. Market orders are
+  immediate-or-cancel and never rest.
+- **Twelve bots with unlimited balances** post and take orders at random levels
+  around the mid, so the book has two sides at any hour. They are ordinary
+  participants calling the same function as the HTTP endpoint; there is no
+  generated price series. The price is whatever the last two participants
+  agreed on.
+- **Guests.** One click creates a funded account — 10,000.00, credited by a
+  ledger transaction from a faucet account — and an HttpOnly session cookie.
+
+Matching runs **in PostgreSQL**, one database transaction per incoming order,
+under a row lock on the market. The order row, every trade it produced, every
+resting order it consumed and four ledger entries per fill commit together. An
+in-memory book would be far faster and would be a second copy of the state to
+reconcile against the money; here there is one copy.
+
+| Invariant                                      | Enforced by                               |
+| ---------------------------------------------- | ----------------------------------------- |
+| a market order never rests                     | `CHECK`                                   |
+| `filled` means `filled_quantity = quantity`    | `CHECK`                                   |
+| a limit order has a price; a market order none | `CHECK`                                   |
+| the smallest possible fill is worth ≥ 0.01     | `CHECK (min_price * lot_size >= 1e8)`     |
+| one trade, one ledger transaction              | `UNIQUE (transaction_id)` + foreign key   |
+| one order per client id, per participant       | `UNIQUE`                                  |
+| a guest cannot go negative                     | the ledger's non-negative check, per fill |
+
+"Unlimited balance" has a precise meaning in a ledger that sums to zero: a bot's
+accounts are allowed to go negative, the way the house's are. Every coin a guest
+holds is a coin some bot is short.
+
+**A bug the first live run found.** The bots rounded both bids and offers _down_
+to the tick. Flooring a bid moves it away from the mid; flooring an offer moves
+it toward the mid — so every pair of quotes sat half a tick low, the next mid
+was computed from them, and the price fell 13% in half an hour in a straight
+line while the mean reversion pushed the other way and lost. Bids now round down
+and offers round up. Over the next 6,900 trades the price stayed between 24.91
+and 25.33 with a 50.0% buy/sell split.
+
+**What this is not.** No fees, no margin, one market, no websocket (the screen
+polls once a second), and guest reservations are arithmetic over open orders
+rather than money moved into a hold account. The legacy API is still
+unauthenticated and still mounted; it must not be exposed on a public
+deployment of this branch as it stands.
+
+```bash
+npm run exchange:db:create      # a separate database: never the seeded one
+npm run exchange:db:migrate
+npm run dev:exchange            # API on :3000 with the bots trading
+npm run dev:web                 # :5173
+```
+
+The bots are **off by default** and the exchange gets its own database, for one
+reason: they write ledger entries around the clock, and the seeded database is
+the dataset every number above was measured against.
+
+---
+
 ## The UI
 
-Seven pages: Dashboard, Trade, Transactions, Account ledger (a T-account),
-Settlements, Chaos panel, Evidence.
+Two pages for the exchange — **Trade** and **Portfolio** — and the original
+seven under **Ledger lab** (`/lab`): Dashboard, House trade, Transactions,
+Account ledger (a T-account), Settlements, Chaos panel, Evidence. The rest of
+this section describes the lab pages.
 
 **Prices shown on the chart are live market data, for display only.** No price
 displayed in this interface is ever written to the ledger. Orders are priced
@@ -291,7 +357,8 @@ Deviations from my usual defaults, and why:
   accepting orders because the thing watching it exhausted the box is the worse
   outcome. `auto-instrumentations-node` is specifically not installed, and a
   test fails CI if `instrumentation-fs` reappears.
-- **No authentication.** A deliberate scope decision: the subject is a correct
+- **No authentication on the legacy API.** (The exchange has guest sessions; see
+  above.) A deliberate scope decision: the subject is a correct
   ledger under concurrency, and a login would add a password-hashing capacity
   constraint without making the ledger any more or less correct. The account
   selector in the UI is a client-side view preference, and if this ever gained
