@@ -1,20 +1,16 @@
 import { Link, Outlet, createRootRoute } from '@tanstack/react-router';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { formatCash } from '@/lib/money';
+import { useMe } from '@/lib/exchange';
 
 /**
- * The seven pages, in the order they tell the story: what you hold, how you
- * trade, what the ledger recorded, how it balances, what settled it, what
- * happens under load, and the evidence for all of it.
+ * The exchange is the product; two pages cover it. The original seven live
+ * under `/lab`, with their own navigation — see `routes/lab/route.tsx`.
  */
 const NAV = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/trade', label: 'Trade' },
-  { to: '/transactions', label: 'Transactions' },
-  { to: '/ledger', label: 'Account ledger' },
-  { to: '/settlements', label: 'Settlements' },
-  { to: '/chaos', label: 'Chaos' },
-  { to: '/evidence', label: 'Evidence' },
+  { to: '/', label: 'Trade' },
+  { to: '/portfolio', label: 'Portfolio' },
 ] as const;
 
 export const Route = createRootRoute({ component: RootLayout });
@@ -29,7 +25,7 @@ function RootLayout(): React.JSX.Element {
           <Link to="/" className="shrink-0">
             <span className="text-ink-50 text-base font-semibold tracking-tight">daftar</span>
             {/* دفتر — "ledger". The name is the thesis. */}
-            <span className="text-ink-500 ml-2 text-xs">ledger-first brokerage</span>
+            <span className="text-ink-500 ml-2 text-xs">beta exchange</span>
           </Link>
 
           <nav className="flex flex-wrap items-center gap-1">
@@ -61,6 +57,18 @@ function RootLayout(): React.JSX.Element {
               </Link>
             ))}
           </nav>
+
+          <div className="ml-auto flex items-center gap-4">
+            <AccountChip />
+            <Link
+              to="/lab"
+              activeProps={{ className: 'text-ink-100' }}
+              inactiveProps={{ className: 'text-ink-500 hover:text-ink-200' }}
+              className="text-xs transition-colors"
+            >
+              Ledger lab
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -71,9 +79,9 @@ function RootLayout(): React.JSX.Element {
       <footer className="border-ink-800 text-ink-500 mt-12 border-t px-4 py-6 text-xs">
         <div className="mx-auto max-w-7xl space-y-1">
           <p>
-            Prices shown on the chart are live market data, for display only. Orders are priced from
-            a frozen reference price and the order endpoint makes no network call — see the Trade
-            page.
+            DFT is a made-up coin that exists only here. Its price is whatever the last two
+            participants agreed on — there is no outside feed — and most of those participants are
+            bots.
           </p>
           <p>
             Charting by{' '}
@@ -85,7 +93,8 @@ function RootLayout(): React.JSX.Element {
             >
               TradingView Lightweight Charts
             </a>{' '}
-            (Apache-2.0). Market data from Binance public endpoints.
+            (Apache-2.0). The ledger lab&apos;s charts use Binance public market data, for display
+            only.
           </p>
         </div>
       </footer>
@@ -94,12 +103,34 @@ function RootLayout(): React.JSX.Element {
 }
 
 /**
+ * The guest's name and available cash, on every page.
+ *
+ * Renders nothing without a session rather than a "sign in" button: the way in
+ * is the order ticket on the Trade page, and a second, different-looking entry
+ * point in the header would be a second thing to keep in step with it.
+ */
+function AccountChip(): React.JSX.Element | null {
+  const me = useMe();
+  if (!me.data) return null;
+
+  return (
+    <Link
+      to="/portfolio"
+      className="border-ink-800 hover:border-ink-600 flex items-baseline gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors"
+    >
+      <span className="text-ink-400">{me.data.participant.displayName}</span>
+      <span className="num text-ink-100">{formatCash(me.data.balances.cashAvailable)}</span>
+    </Link>
+  );
+}
+
+/**
  * The demo banner.
  *
  * Not dismissible, and deliberately at the very top of the document rather than
  * inside the scroll container. This interface shows balances in dollars, a buy
- * button, and a settlements page naming a bank — every visual cue says "real
- * money". One sentence saying otherwise, always visible, is the minimum.
+ * button and a moving price — every visual cue says "real money". One sentence
+ * saying otherwise, always visible, is the minimum.
  */
 function DemoBanner(): React.JSX.Element {
   return (
@@ -109,8 +140,8 @@ function DemoBanner(): React.JSX.Element {
     >
       <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
       <span>
-        <strong className="font-semibold">Demo.</strong> No real funds, no real trading, no real
-        bank. Balances are fictional and every account here is seeded data.
+        <strong className="font-semibold">Beta, play money.</strong> No real funds, no real coin,
+        nothing to withdraw. Balances are fictional and the other traders are mostly bots.
       </span>
     </div>
   );

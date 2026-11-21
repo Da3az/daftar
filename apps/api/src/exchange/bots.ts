@@ -83,10 +83,33 @@ function quantityOf(coins: number, market: Market): bigint {
   return lots * market.lotSize;
 }
 
-/** `reference` moved by `basisPoints` (1/100 of a percent), on tick and in band. */
-function priceAt(reference: bigint, basisPoints: number, market: Market): bigint {
-  let price = (reference * BigInt(10_000 + Math.round(basisPoints))) / 10_000n;
-  price -= price % market.tickSize;
+/**
+ * A quote `basisPoints` (1/100 of a percent) away from the mid, on a tick.
+ *
+ * ## The rounding is directional, and has to be
+ *
+ * A bid rounds **down** to its tick and an offer rounds **up** — each away from
+ * the mid. The first version of this floored both, which reads as harmless and
+ * is not: flooring a bid moves it away from the mid while flooring an offer
+ * moves it *toward* the mid, so every pair of quotes sat about half a tick low.
+ * The next mid was computed from those quotes, and the next quotes from that
+ * mid. It was a ratchet: the price fell 13% in half an hour in a straight line,
+ * with the mean reversion below pushing the other way the whole time and
+ * losing.
+ *
+ * The mid itself is passed in **doubled** (`bestBid + bestAsk`) for the same
+ * reason. Halving it first would floor a half-tick mid before the quote was
+ * even computed, which is the same bias one step earlier.
+ */
+function quoteAt(doubledMid: bigint, basisPoints: number, side: Side, market: Market): bigint {
+  const offset = BigInt(Math.round(basisPoints));
+  const numerator = doubledMid * (side === 'buy' ? 10_000n - offset : 10_000n + offset);
+  // Two for the doubled mid, 10,000 for basis points, then down to whole ticks.
+  const denominator = 20_000n * market.tickSize;
+
+  const ticks =
+    side === 'buy' ? numerator / denominator : (numerator + denominator - 1n) / denominator;
+  const price = ticks * market.tickSize;
 
   if (price < market.minPrice) return market.minPrice;
   if (price > market.maxPrice) return market.maxPrice;
@@ -102,8 +125,8 @@ function priceAt(reference: bigint, basisPoints: number, market: Market): bigint
  * toward it — gently enough that it still wanders, firmly enough that it does
  * not leave.
  */
-function buyProbability(reference: bigint, market: Market): number {
-  const drift = Math.log(Number(reference) / Number(market.openingPrice));
+function buyProbability(doubledMid: bigint, market: Market): number {
+  const drift = Math.log(Number(doubledMid) / (2 * Number(market.openingPrice)));
   return Math.min(0.9, Math.max(0.1, 0.5 - 0.35 * Math.tanh(drift * 1.5)));
 }
 
@@ -135,8 +158,9 @@ async function act(pool: pg.Pool, botExternalId: string, options: BotOptions): P
 
   const bestBid = book.bids[0]?.price;
   const bestAsk = book.asks[0]?.price;
-  const reference =
-    bestBid !== undefined && bestAsk !== undefined ? (bestBid + bestAsk) / 2n : market.lastPrice;
+  // Twice the mid, so a mid that falls between two ticks is not floored away.
+  const doubledMid =
+    bestBid !== undefined && bestAsk !== undefined ? bestBid + bestAsk : 2n * market.lastPrice;
 
   const place = async (order: {
     side: Side;
@@ -181,7 +205,7 @@ async function act(pool: pg.Pool, botExternalId: string, options: BotOptions): P
      */
     const side: Side = Math.random() < 0.5 ? 'buy' : 'sell';
     const distance = logUniform(5, 150);
-    let limitPrice = priceAt(reference, side === 'buy' ? -distance : distance, market);
+    let limitPrice = quoteAt(doubledMid, distance, side, market);
 
     if (side === 'buy' && bestAsk !== undefined && limitPrice >= bestAsk) {
       limitPrice = bestAsk - market.tickSize;
@@ -202,7 +226,7 @@ async function act(pool: pg.Pool, botExternalId: string, options: BotOptions): P
 
   if (roll < 0.9) {
     // A market order: this is what prints trades and moves the price.
-    const side: Side = Math.random() < buyProbability(reference, market) ? 'buy' : 'sell';
+    const side: Side = Math.random() < buyProbability(doubledMid, market) ? 'buy' : 'sell';
     await place({ side, type: 'market', quantity: quantityOf(logUniform(0.2, 12), market) });
     return;
   }

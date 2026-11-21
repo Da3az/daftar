@@ -163,6 +163,10 @@ services:
       DAFTAR_NAIVE_IDEMPOTENCY: 'false'
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:?WEBHOOK_SIGNING_SECRET is required}
       CHAOS_TOKEN_SECRET: ${CHAOS_TOKEN_SECRET:?CHAOS_TOKEN_SECRET is required}
+      GUEST_SESSION_SECRET: ${GUEST_SESSION_SECRET:?GUEST_SESSION_SECRET is required}
+      # Off unless asked for: the bots write ledger entries continuously, and
+      # the memory caps above were published for a box that is not running them.
+      EXCHANGE_BOTS_ENABLED: ${EXCHANGE_BOTS_ENABLED:-false}
       # Tracing off, as it is everywhere. The SDK is the component most likely
       # to leak memory here and there is no collector on this box to send to.
       OTEL_ENABLED: 'false'

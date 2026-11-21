@@ -4,7 +4,7 @@ import { marked } from 'marked';
 import { Card, CardBody, CardHeader } from '@/components/ui/primitives';
 import { cn } from '@/lib/cn';
 
-export const Route = createFileRoute('/evidence')({ component: Evidence });
+export const Route = createFileRoute('/lab/evidence')({ component: Evidence });
 
 /**
  * # The Evidence page
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/evidence')({ component: Evidence });
  * subset is subtly wrong in ways that silently mangle a table, and these tables
  * are the deliverable. It has zero runtime dependencies.
  */
-const FILES = import.meta.glob<string>('../../../../docs/evidence/*.md', {
+const FILES = import.meta.glob<string>('../../../../../docs/evidence/*.md', {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -45,7 +45,7 @@ interface Doc {
   markdown: string;
 }
 
-/** `../../../../docs/evidence/03-concurrency-tradeoff.md` → `03-concurrency-tradeoff`. */
+/** `../../../../../docs/evidence/03-concurrency-tradeoff.md` → `03-concurrency-tradeoff`. */
 const slugOf = (path: string): string => path.split('/').pop()!.replace(/\.md$/, '');
 
 /** The first `# ` heading, which every evidence file has by template. */

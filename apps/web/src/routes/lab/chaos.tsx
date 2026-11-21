@@ -27,7 +27,7 @@ import {
   ThNum,
 } from '@/components/ui/primitives';
 
-export const Route = createFileRoute('/chaos')({ component: ChaosPanel });
+export const Route = createFileRoute('/lab/chaos')({ component: ChaosPanel });
 
 /** The six profiles, grouped so the correct and broken ones are not adjacent. */
 const PROFILES: { value: string; label: string; profile: ChaosProfile; group: string }[] = [

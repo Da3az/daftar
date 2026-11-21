@@ -28,7 +28,7 @@ import {
   ThNum,
 } from '@/components/ui/primitives';
 
-export const Route = createFileRoute('/ledger')({ component: AccountLedger });
+export const Route = createFileRoute('/lab/ledger')({ component: AccountLedger });
 
 function AccountLedger(): React.JSX.Element {
   const account = useCurrentAccount();

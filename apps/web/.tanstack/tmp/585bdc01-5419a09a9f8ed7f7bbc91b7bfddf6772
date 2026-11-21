@@ -28,7 +28,7 @@ import {
   Th,
 } from '@/components/ui/primitives';
 
-export const Route = createFileRoute('/trade')({ component: Trade });
+export const Route = createFileRoute('/lab/trade')({ component: Trade });
 
 const MODES = ['serializable', 'advisory', 'pessimistic'] as const;
 

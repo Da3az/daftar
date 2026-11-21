@@ -263,6 +263,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         200: z.object({
           participant: ParticipantOut,
           symbol: z.string(),
+          startingCash: CashAmountOut,
           balances: BalancesOut,
           openOrders: z.array(OrderOut),
         }),
@@ -292,6 +293,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
           createdAt: participant.createdAt,
         },
         symbol,
+        startingCash: formatCash(GUEST_STARTING_CASH),
         balances: {
           cash: formatCash(balances.cash),
           cashAvailable: formatCash(clamp(balances.cashAvailable)),

@@ -30,7 +30,7 @@ import {
   ThNum,
 } from '@/components/ui/primitives';
 
-export const Route = createFileRoute('/transactions')({ component: Transactions });
+export const Route = createFileRoute('/lab/transactions')({ component: Transactions });
 
 function Transactions(): React.JSX.Element {
   const account = useCurrentAccount();

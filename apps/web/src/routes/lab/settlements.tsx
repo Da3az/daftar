@@ -19,7 +19,7 @@ import {
   ThNum,
 } from '@/components/ui/primitives';
 
-export const Route = createFileRoute('/settlements')({ component: Settlements });
+export const Route = createFileRoute('/lab/settlements')({ component: Settlements });
 
 function Settlements(): React.JSX.Element {
   const queryClient = useQueryClient();
