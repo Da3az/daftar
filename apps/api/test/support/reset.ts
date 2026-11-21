@@ -26,6 +26,9 @@ import type pg from 'pg';
  */
 export async function resetLedger(pool: pg.Pool): Promise<void> {
   // Children before parents.
+  await pool.query('DELETE FROM exchange_activity');
+  await pool.query('DELETE FROM cash_movements');
+  await pool.query('DELETE FROM deposits');
   await pool.query('DELETE FROM trades');
   await pool.query('DELETE FROM book_orders');
   await pool.query('DELETE FROM participants');

@@ -232,6 +232,26 @@ const schema = z.object({
    */
   EXCHANGE_BOT_MEAN_INTERVAL_MS: z.coerce.number().int().min(100).default(4_000),
 
+  /**
+   * Run the outbox worker in this process, publishing to the exchange's
+   * activity feed.
+   *
+   * **Off by default**, for the bots' reason: it writes. Against the seeded
+   * database it would drain the outbox rows the measured order path left
+   * pending, which no evidence file expects to have moved.
+   *
+   * Turning it off on a running exchange is also the demonstration: money keeps
+   * moving, events queue, and the feed catches up when it comes back — late,
+   * never lost.
+   *
+   * One instance only. A second would not double-publish, but it would split
+   * an account's events across two workers and lose their order.
+   */
+  OUTBOX_WORKER_ENABLED: boolish.default(false),
+
+  /** Pause between outbox polls when the last one found less than a full batch. */
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(1_000),
+
   OTEL_ENABLED: boolish.default(false),
 
   /**

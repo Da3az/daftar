@@ -1227,6 +1227,3765 @@
           }
         }
       }
+    },
+    "/v1/webhooks/events/{id}/replay": {
+      "post": {
+        "summary": "Re-deliver a stored event through the real inbound path.",
+        "tags": [
+          "webhooks"
+        ],
+        "description": "Takes the **stored payload bytes**, signs them with the current secret\nand a fresh timestamp, and feeds them back through\n`POST /v1/webhooks/:provider` — the same handler, the same signature\nverification, the same unique index.\n\nIt is not a shortcut that marks something re-processed. A replay of a\nsettled event is **expected to come back `duplicate: true` with 200**,\nand that is the point: the Settlements page has a button that\ndemonstrates the idempotency guarantee rather than describing it.\n\nDispatched in-process via Fastify’s `inject`, so it makes no network\ncall and cannot be pointed at anything but this server.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "replayed": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "body": {}
+                  },
+                  "required": [
+                    "replayed",
+                    "status",
+                    "body"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{externalId}/statement": {
+      "get": {
+        "summary": "Account statement with a running balance. The T-account view.",
+        "tags": [
+          "reports"
+        ],
+        "description": "Entries for one account in `(created_at, id)` order, each with the\nbalance after it.\n\n**The ordering is load-bearing.** A running balance is a window\nfunction, and a window function’s frame is defined by its `ORDER BY`.\nOrdering by `created_at` alone leaves ties unspecified — and ties are\nguaranteed, because a four-leg order writes all four entries in one\nstatement with one `now()`. Two readers would then disagree about what\nthe balance was at a given row. `id` makes the order total.\n\nThis is the query Phase 6 indexed; see\ndocs/evidence/06-query-performance.md for the before/after plans.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "example": "cash-0001"
+            },
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "description": "Opaque client-facing account identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "account": {
+                      "type": "object",
+                      "properties": {
+                        "externalId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "externalId",
+                        "kind",
+                        "unit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "entryId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "transactionId": {
+                            "type": "string"
+                          },
+                          "transactionKind": {
+                            "type": "string"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "debit",
+                              "credit"
+                            ]
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "runningBalance": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "entryId",
+                          "createdAt",
+                          "transactionId",
+                          "transactionKind",
+                          "direction",
+                          "unit",
+                          "amount",
+                          "runningBalance"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "account",
+                    "rows"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{externalId}/positions": {
+      "get": {
+        "summary": "Cash and asset positions for one customer. The dashboard query.",
+        "tags": [
+          "reports"
+        ],
+        "description": "Cash balance plus every asset position, with cost basis.\n\n**Cost basis comes from the orders table, not from the ledger.** The\nledger records what moved; it does not record what you paid on average,\nbecause that is a derived figure and deriving it needs the per-order\nprices. Sum of notional over sum of quantity, both as integers.\n\nPosition accounts are discovered by `unit`, so an asset the customer\nhas never traded simply does not appear rather than appearing as zero.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "example": "cash-0001"
+            },
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "description": "Opaque client-facing account identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "externalId": {
+                      "type": "string"
+                    },
+                    "cash": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "positions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "string"
+                          },
+                          "costBasis": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "referencePrice": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "marketValue": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          }
+                        },
+                        "required": [
+                          "symbol",
+                          "quantity",
+                          "costBasis",
+                          "referencePrice",
+                          "marketValue"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "externalId",
+                    "cash",
+                    "positions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/accounts/{externalId}/transactions": {
+      "get": {
+        "summary": "Ledger transactions touching this account, with every leg.",
+        "tags": [
+          "reports"
+        ],
+        "description": "Keyset pagination on `before`, not `OFFSET`.\n\n`OFFSET n` makes the database walk and discard n rows, so page 100 of a\nlist costs a hundred times page 1 — and a row inserted while the user\nis paging shifts every subsequent page by one, which silently skips a\nrecord. A cursor on the transaction id has neither problem.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Return transactions with an id strictly below this. The cursor."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "example": "cash-0001"
+            },
+            "in": "path",
+            "name": "externalId",
+            "required": true,
+            "description": "Opaque client-facing account identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "Ledger transaction id, as a decimal string."
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "accountExternalId": {
+                                  "type": "string"
+                                },
+                                "accountKind": {
+                                  "type": "string"
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "debit",
+                                    "credit"
+                                  ]
+                                },
+                                "unit": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string",
+                                  "description": "Signed exact decimal string, scaled for its unit."
+                                }
+                              },
+                              "required": [
+                                "accountExternalId",
+                                "accountKind",
+                                "direction",
+                                "unit",
+                                "amount"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "order": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "externalId": {
+                                    "type": "string"
+                                  },
+                                  "symbol": {
+                                    "type": "string"
+                                  },
+                                  "side": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buy",
+                                      "sell"
+                                    ]
+                                  },
+                                  "quantity": {
+                                    "type": "string"
+                                  },
+                                  "price": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                                    "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                    "example": "1000.00"
+                                  },
+                                  "notional": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                                    "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                    "example": "1000.00"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "idempotencyKey": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "externalId",
+                                  "symbol",
+                                  "side",
+                                  "quantity",
+                                  "price",
+                                  "notional",
+                                  "status",
+                                  "idempotencyKey"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "webhookEvent": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "idempotencyKey": {
+                                    "type": "string"
+                                  },
+                                  "eventType": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "provider",
+                                  "idempotencyKey",
+                                  "eventType"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "createdAt",
+                          "legs",
+                          "order",
+                          "webhookEvent"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "transactions",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/events": {
+      "get": {
+        "summary": "Inbound webhook events. The settlements view.",
+        "tags": [
+          "reports"
+        ],
+        "description": "Every delivery the system has seen, including the ones it rejected.\n\nRejected deliveries are **stored**, not dropped: a stale replay and a\nforged signature are different events and both are worth seeing. The\npayload hash is what makes a same-key-different-body conflict\ndetectable at all, and `payloadConflictCount` records how many times it\nhas happened.\n\nThe hash is truncated to 16 hex characters in the response — enough to\ncompare two deliveries by eye, not enough to be mistaken for the digest\nthe signature is computed over.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "in": "query",
+            "name": "provider",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "description": "The provider's event id — the idempotency key."
+                          },
+                          "objectId": {
+                            "type": "string"
+                          },
+                          "eventType": {
+                            "type": "string"
+                          },
+                          "signatureValid": {
+                            "type": "boolean"
+                          },
+                          "withinWindow": {
+                            "type": "boolean"
+                          },
+                          "payloadHash": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "deliveryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "duplicate": {
+                            "type": "boolean"
+                          },
+                          "payloadConflictCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "transactionId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "errorDetail": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "receivedAt": {
+                            "type": "string"
+                          },
+                          "processedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "provider",
+                          "eventId",
+                          "objectId",
+                          "eventType",
+                          "signatureValid",
+                          "withinWindow",
+                          "payloadHash",
+                          "state",
+                          "deliveryCount",
+                          "duplicate",
+                          "payloadConflictCount",
+                          "transactionId",
+                          "errorDetail",
+                          "receivedAt",
+                          "processedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "events",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/session": {
+      "post": {
+        "summary": "Issue a short-lived burst token and a private demo tenant.",
+        "tags": [
+          "chaos"
+        ],
+        "description": "The token is an HMAC over its own contents — no sessions table, so\nnothing to clean up and a restart does not invalidate a token\nmid-demo. It cannot be revoked before it expires, which is an\nacceptable trade at a 15-minute lifetime for an endpoint whose worst\ncase is already capped.\n\n**Not a static key.** A key shipped in a JavaScript bundle is a public\nkey with extra steps.\n\nThe `tenant` namespaces every account the burst touches. Demo writes\nnever mix with the seeded data — a burst is *supposed* to cause\noverdrafts under a naive flag, and doing that to a measured account\nwould corrupt the dataset every benchmark in docs/evidence/ was taken\nagainst.",
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "tenant": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Unix seconds."
+                    },
+                    "ttlSeconds": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "limits": {
+                      "type": "object",
+                      "properties": {
+                        "maxVirtualUsers": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "maxAccountSpread": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "maxVirtualUsers",
+                        "maxAccountSpread"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "tenant",
+                    "expiresAt",
+                    "ttlSeconds",
+                    "limits"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/burst": {
+      "post": {
+        "summary": "Fire N concurrent ledger writes server-side and check the invariants.",
+        "tags": [
+          "chaos"
+        ],
+        "description": "**The concurrency happens here, not in the browser.** A browser caps\nat 6 connections per origin on HTTP/1.1 and runs one JavaScript\nthread, so a `Promise.all` of 200 `fetch` calls from a page is a queue\nof 6. The database would see six overlapping transactions, every\ninvariant would hold comfortably, and the panel would be showing the\nledger surviving load that never happened — which would quietly\ndiscredit every measured number in this repo.\n\nRuns the **real** write path: `placeOrder` under the chosen strategy,\nor one of the Phase 1 naive debit paths. Not a simulation.\n\nCaps are enforced server-side and an over-large request is a 400, not\na clamp — a client asking for 10,000 virtual users has a bug, and\nclamping hides it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "order"
+                            ]
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "pessimistic",
+                              "serializable",
+                              "advisory"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "mode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "debit"
+                            ]
+                          },
+                          "strategy": {
+                            "type": "string",
+                            "enum": [
+                              "naive_overdraft",
+                              "naive_lost_update",
+                              "guarded_atomic"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "strategy"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "virtualUsers": {
+                    "default": 50,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200
+                  },
+                  "accountSpread": {
+                    "default": 10,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  }
+                },
+                "required": [
+                  "profile"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "header",
+            "name": "x-daftar-chaos-token",
+            "required": true,
+            "description": "From POST /v1/chaos/session."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tenant": {
+                      "type": "string"
+                    },
+                    "profile": {},
+                    "virtualUsers": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "accountSpread": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "attempted": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "succeeded": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "refused": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "errored": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "totalAttempts": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "serializationFailures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "deadlocks": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "durationMs": {
+                      "type": "number"
+                    },
+                    "throughput": {
+                      "type": "number"
+                    },
+                    "openingPerAccount": {
+                      "type": "string"
+                    },
+                    "invariants": {
+                      "type": "object",
+                      "properties": {
+                        "entriesSumToZeroPerUnit": {
+                          "type": "boolean"
+                        },
+                        "unitSums": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "unit": {
+                                "type": "string"
+                              },
+                              "sum": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "unit",
+                              "sum"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "overdrawnAccounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "externalId": {
+                                "type": "string"
+                              },
+                              "balance": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "externalId",
+                              "balance"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "overdraftOccurred": {
+                          "type": "boolean"
+                        },
+                        "balanceMatchesEntries": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "drift": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "externalId": {
+                                "type": "string"
+                              },
+                              "balance": {
+                                "type": "string"
+                              },
+                              "entriesSum": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "externalId",
+                              "balance",
+                              "entriesSum"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "expectedCash": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "actualCash": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "cashDiscrepancy": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "entriesSumToZeroPerUnit",
+                        "unitSums",
+                        "overdrawnAccounts",
+                        "overdraftOccurred",
+                        "balanceMatchesEntries",
+                        "drift",
+                        "expectedCash",
+                        "actualCash",
+                        "cashDiscrepancy"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "tenant",
+                    "profile",
+                    "virtualUsers",
+                    "accountSpread",
+                    "attempted",
+                    "succeeded",
+                    "refused",
+                    "errored",
+                    "totalAttempts",
+                    "serializationFailures",
+                    "deadlocks",
+                    "durationMs",
+                    "throughput",
+                    "openingPerAccount",
+                    "invariants"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/guest": {
+      "post": {
+        "summary": "Enter as a guest: create a funded account and a session cookie.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Creates a cash account, a position account and a participant, and\ncredits the starting balance from `external:guest-faucet` — all in one\ndatabase transaction, so a guest that exists is a guest that is funded.\n\nIdempotent for a browser that already holds a valid session: it gets\nits existing guest back with a 200 rather than a second account.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "participant": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "guest",
+                            "bot"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "displayName",
+                        "kind",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "startingCash": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "participant",
+                    "startingCash"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "participant": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "guest",
+                            "bot"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "displayName",
+                        "kind",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "startingCash": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "participant",
+                    "startingCash"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/logout": {
+      "post": {
+        "summary": "Forget the guest session on this browser.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Clears the cookie. The account, its orders and its ledger history remain — entries are append-only — but nothing can reach them once the cookie is gone.",
+        "responses": {
+          "204": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/exchange/me": {
+      "get": {
+        "summary": "The session's participant, balances and working orders.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": "DFT",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "in": "query",
+            "name": "symbol",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "participant": {
+                      "type": "object",
+                      "properties": {
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "guest",
+                            "bot"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "displayName",
+                        "kind",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "startingCash": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "handle": {
+                      "type": "string",
+                      "description": "Public code another guest uses to send this one cash."
+                    },
+                    "netContributed": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Opening credit plus deposits and transfers in, less withdrawals and transfers out. Profit and loss is equity minus this.",
+                      "example": "1000.00"
+                    },
+                    "pendingEvents": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Events committed with this account’s money and not yet in its feed."
+                    },
+                    "balances": {
+                      "type": "object",
+                      "properties": {
+                        "cash": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "cashAvailable": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "asset": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "assetAvailable": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        }
+                      },
+                      "required": [
+                        "cash",
+                        "cashAvailable",
+                        "asset",
+                        "assetAvailable"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "openOrders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientOrderId": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string",
+                            "enum": [
+                              "buy",
+                              "sell"
+                            ]
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "limit",
+                              "market"
+                            ]
+                          },
+                          "limitPrice": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "filledQuantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "filled",
+                              "cancelled"
+                            ]
+                          },
+                          "cancelReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientOrderId",
+                          "symbol",
+                          "side",
+                          "type",
+                          "limitPrice",
+                          "quantity",
+                          "filledQuantity",
+                          "status",
+                          "cancelReason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "participant",
+                    "symbol",
+                    "startingCash",
+                    "handle",
+                    "netContributed",
+                    "pendingEvents",
+                    "balances",
+                    "openOrders"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/market": {
+      "get": {
+        "summary": "One market: rules, last price, 24h stats, order book and tape.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Everything the trading screen redraws on each poll, in one response, so the book and the tape it is shown beside come from reads a few milliseconds apart rather than from three independently-timed requests.",
+        "parameters": [
+          {
+            "schema": {
+              "default": "DFT",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "in": "query",
+            "name": "symbol",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 15,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "depth",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 40,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "tape",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "market": {
+                      "type": "object",
+                      "properties": {
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "tickSize": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "lotSize": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "minPrice": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "maxPrice": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "openingPrice": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "lastPrice": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "lastTradeAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "symbol",
+                        "displayName",
+                        "tickSize",
+                        "lotSize",
+                        "minPrice",
+                        "maxPrice",
+                        "openingPrice",
+                        "lastPrice",
+                        "lastTradeAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "open": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "high": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "low": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "volume": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "trades": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "open",
+                        "high",
+                        "low",
+                        "volume",
+                        "trades"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "book": {
+                      "type": "object",
+                      "properties": {
+                        "bids": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "price": {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              "quantity": {
+                                "type": "string",
+                                "pattern": "^\\d+\\.\\d{8}$",
+                                "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "price",
+                              "quantity",
+                              "orders"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "asks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "price": {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              "quantity": {
+                                "type": "string",
+                                "pattern": "^\\d+\\.\\d{8}$",
+                                "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                              },
+                              "orders": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "price",
+                              "quantity",
+                              "orders"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "bids",
+                        "asks"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "tape": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "price": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "takerSide": {
+                            "type": "string",
+                            "enum": [
+                              "buy",
+                              "sell"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "price",
+                          "quantity",
+                          "takerSide",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "market",
+                    "stats",
+                    "book",
+                    "tape"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/candles": {
+      "get": {
+        "summary": "OHLC candles, aggregated from trades on read.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": "DFT",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "in": "query",
+            "name": "symbol",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "1m",
+              "type": "string",
+              "enum": [
+                "1m",
+                "5m",
+                "1h"
+              ]
+            },
+            "in": "query",
+            "name": "interval",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 240,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "interval": {
+                      "type": "string",
+                      "enum": [
+                        "1m",
+                        "5m",
+                        "1h"
+                      ]
+                    },
+                    "intervalSeconds": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "candles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "time": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Bucket start, Unix seconds."
+                          },
+                          "open": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "high": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "low": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "close": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "volume": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          }
+                        },
+                        "required": [
+                          "time",
+                          "open",
+                          "high",
+                          "low",
+                          "close",
+                          "volume"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "interval",
+                    "intervalSeconds",
+                    "candles"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/orders": {
+      "post": {
+        "summary": "Place a limit or market order on the book.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "The order is matched against resting orders at once, best price first\nand oldest first within a price. Each fill is one four-leg ledger\ntransaction, and the order row, every trade and every entry commit\ntogether or not at all.\n\nA **limit** order rests with whatever is left unfilled. A **market**\norder never rests: the unfilled remainder is cancelled\n(immediate-or-cancel), and one that fills nothing at all is refused\nwith `no_liquidity` and leaves no row.\n\nA fill is priced at the *resting* order’s limit price. The `symbol` is\na query parameter; the account is the session’s and cannot be named.\n\n**Retries.** Send an `Idempotency-Key` and a repeat of the same request\ngets the original answer back — the same order, the same fills — with\n200 instead of 201, rather than a second order. The key is claimed by a\nUNIQUE index before any matching happens, and for an accepted order its\nresponse is recorded in the matching transaction itself. A repeat that\narrives while the first is still matching gets 409; the same key with a\ndifferent body gets 422. Without the header, `clientOrderId` alone still\nmakes a double submit one order, answered with 409.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "limit"
+                        ]
+                      },
+                      "clientOrderId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                        "description": "Client-chosen order id, unique per participant.",
+                        "example": "web-3f6c2c1e9b7a4d10"
+                      },
+                      "side": {
+                        "type": "string",
+                        "enum": [
+                          "buy",
+                          "sell"
+                        ]
+                      },
+                      "quantity": {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?$",
+                        "description": "Asset quantity as an exact decimal string with at most 8 fractional digits. Never a JSON number.",
+                        "example": "0.50000000"
+                      },
+                      "limitPrice": {
+                        "description": "Price per whole coin. Required for a limit order.",
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?$",
+                        "example": "100.00"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "clientOrderId",
+                      "side",
+                      "quantity",
+                      "limitPrice"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "market"
+                        ]
+                      },
+                      "clientOrderId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                        "description": "Client-chosen order id, unique per participant.",
+                        "example": "web-3f6c2c1e9b7a4d10"
+                      },
+                      "side": {
+                        "type": "string",
+                        "enum": [
+                          "buy",
+                          "sell"
+                        ]
+                      },
+                      "quantity": {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?$",
+                        "description": "Asset quantity as an exact decimal string with at most 8 fractional digits. Never a JSON number.",
+                        "example": "0.50000000"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "clientOrderId",
+                      "side",
+                      "quantity"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "default": "DFT",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "in": "query",
+            "name": "symbol",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255
+            },
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "description": "Optional. Scoped to the session’s participant."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrderId": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "buy",
+                            "sell"
+                          ]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "limit",
+                            "market"
+                          ]
+                        },
+                        "limitPrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "filledQuantity": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "filled",
+                            "cancelled"
+                          ]
+                        },
+                        "cancelReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "clientOrderId",
+                        "symbol",
+                        "side",
+                        "type",
+                        "limitPrice",
+                        "quantity",
+                        "filledQuantity",
+                        "status",
+                        "cancelReason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "fills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "price": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "notional": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          }
+                        },
+                        "required": [
+                          "price",
+                          "quantity",
+                          "notional"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "fills"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "clientOrderId": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "buy",
+                            "sell"
+                          ]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "limit",
+                            "market"
+                          ]
+                        },
+                        "limitPrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "filledQuantity": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "filled",
+                            "cancelled"
+                          ]
+                        },
+                        "cancelReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "clientOrderId",
+                        "symbol",
+                        "side",
+                        "type",
+                        "limitPrice",
+                        "quantity",
+                        "filledQuantity",
+                        "status",
+                        "cancelReason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "fills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "price": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "notional": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          }
+                        },
+                        "required": [
+                          "price",
+                          "quantity",
+                          "notional"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "fills"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "The session's orders, newest first.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "open",
+                "all"
+              ]
+            },
+            "in": "query",
+            "name": "status",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientOrderId": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string",
+                            "enum": [
+                              "buy",
+                              "sell"
+                            ]
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "limit",
+                              "market"
+                            ]
+                          },
+                          "limitPrice": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "filledQuantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "filled",
+                              "cancelled"
+                            ]
+                          },
+                          "cancelReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientOrderId",
+                          "symbol",
+                          "side",
+                          "type",
+                          "limitPrice",
+                          "quantity",
+                          "filledQuantity",
+                          "status",
+                          "cancelReason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "orders"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/orders/{clientOrderId}": {
+      "delete": {
+        "summary": "Cancel one of the session’s open orders.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "example": "web-3f6c2c1e9b7a4d10"
+            },
+            "in": "path",
+            "name": "clientOrderId",
+            "required": true,
+            "description": "Client-chosen order id, unique per participant."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "cancelled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/fills": {
+      "get": {
+        "summary": "The session's trades, from either side of the book, newest first.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "price": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "quantity": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "notional": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "tradeId": {
+                            "type": "string"
+                          },
+                          "clientOrderId": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string",
+                            "enum": [
+                              "buy",
+                              "sell"
+                            ]
+                          },
+                          "liquidity": {
+                            "type": "string",
+                            "enum": [
+                              "maker",
+                              "taker"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "price",
+                          "quantity",
+                          "notional",
+                          "tradeId",
+                          "clientOrderId",
+                          "symbol",
+                          "side",
+                          "liquidity",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "fills"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/deposits": {
+      "post": {
+        "summary": "Deposit cash through the simulated payment provider.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "There is no real provider. This endpoint plays one: it builds a\n`funding.succeeded` event for the session’s account, signs it with the\nwebhook secret, and delivers it to `POST /v1/webhooks/simbank` — the\nreal inbound handler, with its signature check, its unique index and its\nstate machine. Nothing here credits an account directly.\n\n`deliveries` asks the provider to send the same event that many times\n**at once**, which is what at-least-once delivery looks like on a bad\nday. Exactly one is processed. The rest come back as duplicates, or as\n409 while the first is still in flight — and a 409 is then re-delivered,\nas a real provider would, until it gets a definite answer.\n\nWhether the deposit was credited is not stored on the deposit: it is\nread from the webhook event, which is settled in the same database\ntransaction as the ledger entries.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  },
+                  "deliveries": {
+                    "default": 1,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "amount"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "depositId": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "credited": {
+                      "type": "boolean"
+                    },
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "delivery": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Which of the requested deliveries, from 1."
+                          },
+                          "retry": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "0 for the first attempt."
+                          },
+                          "status": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "description": "`processed`, `duplicate`, `in_progress`, or a rejection code."
+                          }
+                        },
+                        "required": [
+                          "delivery",
+                          "retry",
+                          "status",
+                          "outcome"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "processed": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "duplicates": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "inProgress": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "rejected": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "processed",
+                        "duplicates",
+                        "inProgress",
+                        "rejected"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "depositId",
+                    "amount",
+                    "credited",
+                    "deliveries",
+                    "summary"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/withdrawals": {
+      "post": {
+        "summary": "Withdraw cash from the session’s account.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "One two-leg ledger transaction: the guest is debited and\n`external:funding` credited. It does **not** take the market lock, so it\ncan overlap a fill against the same cash account; the ledger’s account\nlock and non-negative check are what keep both from spending the same\nmoney. Cash reserved by open buy orders cannot be withdrawn.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                    "description": "Client-chosen id for this movement, unique per participant.",
+                    "example": "web-3f6c2c1e9b7a4d10"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "amount"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "completed"
+                      ]
+                    },
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "cashBalance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "amount",
+                    "cashBalance"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/transfers": {
+      "post": {
+        "summary": "Send cash to another guest, by their handle.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "One two-leg ledger transaction between two guests’ cash accounts. Like\na withdrawal it runs outside the market lock. Two guests paying each\nother at the same instant is the textbook deadlock; it cannot happen\nhere because both transactions lock the two accounts in ascending id\norder.\n\nThe recipient is named by `handle`, a public code from `GET\n/v1/exchange/me` — never by account id.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                    "description": "Client-chosen id for this movement, unique per participant.",
+                    "example": "web-3f6c2c1e9b7a4d10"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  },
+                  "toHandle": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{10}$",
+                    "description": "The recipient’s handle."
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "amount",
+                  "toHandle"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "completed"
+                      ]
+                    },
+                    "amount": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "cashBalance": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "amount",
+                    "cashBalance"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/activity": {
+      "get": {
+        "summary": "The session's activity feed, as delivered by the outbox worker.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Trades, deposits, withdrawals and transfers. Nothing writes this feed\ndirectly: each event is an outbox row committed in the same database\ntransaction as the money it describes, and published here afterwards by\na worker.\n\nSo the feed can be **behind** — `pending` says by how many events — but\nit cannot be missing one or contain one that did not happen. Delivery\nis at-least-once and the feed is idempotent, so a re-delivered event is\nstill one row.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pending": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "description": "e.g. `trade.buy`, `deposit.credited`, `transfer.received`."
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "symbol": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "side": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "buy",
+                                  "sell"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "liquidity": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "maker",
+                                  "taker"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "price": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quantity": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^\\d+\\.\\d{8}$",
+                                "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "counterparty": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "occurredAt",
+                          "publishedAt",
+                          "amount",
+                          "symbol",
+                          "side",
+                          "liquidity",
+                          "price",
+                          "quantity",
+                          "counterparty"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "pending",
+                    "events"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [

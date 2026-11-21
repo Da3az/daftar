@@ -167,6 +167,8 @@ services:
       # Off unless asked for: the bots write ledger entries continuously, and
       # the memory caps above were published for a box that is not running them.
       EXCHANGE_BOTS_ENABLED: ${EXCHANGE_BOTS_ENABLED:-false}
+      # Off unless asked for, like the bots. One instance only.
+      OUTBOX_WORKER_ENABLED: ${OUTBOX_WORKER_ENABLED:-false}
       # Tracing off, as it is everywhere. The SDK is the component most likely
       # to leak memory here and there is no collector on this box to send to.
       OTEL_ENABLED: 'false'

@@ -57,6 +57,17 @@ const bots = env.EXCHANGE_BOTS_ENABLED
   : null;
 
 /**
+ * The outbox worker, on the same opt-in terms as the bots. With it off, events
+ * still commit with the money that caused them; they wait.
+ */
+const outbox = env.OUTBOX_WORKER_ENABLED
+  ? (await import('./outbox/runner.ts')).startOutboxWorker(pool, {
+      pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+      log: app.log,
+    })
+  : null;
+
+/**
  * Graceful shutdown, in the order that matters: stop accepting connections and
  * drain in-flight requests first, *then* close the pool. Closing the pool first
  * would fail every request that is mid-transaction, which during a rolling
@@ -74,6 +85,8 @@ async function shutdown(signal: string): Promise<void> {
     await app.close();
     // Before the pool: an in-flight bot order is a transaction on it.
     await bots?.stop();
+    // Likewise: a cycle in progress holds claimed rows it should get to settle.
+    await outbox?.stop();
     await pool.end();
     // Last, and after the pool: flushing spans needs the export to finish, and
     // the final spans are the ones describing the requests that were still

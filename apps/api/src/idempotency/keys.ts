@@ -355,6 +355,24 @@ export async function settle(
 }
 
 /**
+ * Give a claimed key back, because the work **threw** rather than answered.
+ *
+ * A request that fails with something transient — a dropped connection, a
+ * statement timeout — has no response worth recording. Recording one would
+ * "burn" the key: every retry would replay the error for as long as the row
+ * lived, which is the opposite of what a retry is for. Deleting the claim lets
+ * the next attempt start clean.
+ *
+ * `AND state = 'in_progress'` so this can never remove a recorded answer.
+ */
+export async function release(pool: pg.Pool, id: bigint): Promise<void> {
+  if (id === NAIVE_UNCLAIMED) return;
+  await pool.query(`DELETE FROM idempotency_keys WHERE id = $1::bigint AND state = 'in_progress'`, [
+    id.toString(),
+  ]);
+}
+
+/**
  * Delete keys older than `olderThanHours`.
  *
  * Without this the table grows forever. The retention window is "how long might

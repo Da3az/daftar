@@ -2,6 +2,7 @@ import type pg from 'pg';
 import { notional as computeNotional } from '@daftar/money';
 import { postWithin, type Leg } from '../ledger/post.ts';
 import { isRetryable } from '../ledger/sqlstate.ts';
+import { enqueue } from '../outbox/worker.ts';
 
 /**
  * # The matching engine
@@ -140,6 +141,23 @@ export interface PlaceBookOrderRequest {
   quantity: bigint;
   /** Cash minor units per whole coin. Required for `limit`, absent for `market`. */
   limitPrice?: bigint;
+
+  /**
+   * Extra work to run **in the matching transaction**, after everything else
+   * is written and before COMMIT, for an order that was accepted.
+   *
+   * This is how the route records an `Idempotency-Key`'s response atomically
+   * with the order it describes: a key that says "completed" while the order
+   * rolled back, or an order that committed while its key still says "in
+   * progress", is a retry that gets the wrong answer.
+   *
+   * Runs on every attempt, like `PostRequest.withinTransaction`, and for the
+   * same reason that is free: a retried attempt is a new transaction.
+   */
+  onAccepted?: (
+    client: pg.PoolClient,
+    accepted: { order: BookOrder; fills: Fill[] },
+  ) => Promise<void>;
 }
 
 export interface BookOrder {
@@ -605,6 +623,38 @@ export async function placeBookOrder(
           transactionId: outcome.transactionId,
         });
 
+        /**
+         * One outbox event per **guest** side of the fill, in this transaction.
+         *
+         * The event and the money commit together, so the activity feed can be
+         * late but cannot miss a trade or announce one that rolled back. Keyed
+         * on each side's own cash account: an outbox row belongs to one
+         * account's shard, which is what keeps one guest's events in order.
+         *
+         * Bots get none. Nothing reads a bot's feed, and twelve of them would
+         * write thousands of rows a day to say so.
+         */
+        const sides = [
+          { party: buyer, side: 'buy' as const, liquidity: buying ? 'taker' : 'maker' },
+          { party: seller, side: 'sell' as const, liquidity: buying ? 'maker' : 'taker' },
+        ];
+        for (const { party, side, liquidity } of sides) {
+          if (!party.limited) continue;
+          await enqueue(client, {
+            transactionId: outcome.transactionId,
+            accountId: party.cash,
+            eventType: `trade.${side}`,
+            payload: {
+              symbol: request.symbol,
+              side,
+              liquidity,
+              price: price.toString(),
+              quantity: quantity.toString(),
+              notional: cash.toString(),
+            },
+          });
+        }
+
         remaining -= quantity;
         if (buying) availableCash -= cash;
         else availableAsset -= quantity;
@@ -704,29 +754,29 @@ export async function placeBookOrder(
       );
     }
 
-    return {
-      commit: true,
-      value: {
-        status: 'accepted',
-        order: {
-          externalId: request.externalId,
-          symbol: request.symbol,
-          side: request.side,
-          type: request.type,
-          limitPrice: limitPrice ?? null,
-          quantity: request.quantity,
-          filledQuantity,
-          status,
-          cancelReason,
-        },
-        fills: fills.map(({ price, quantity, notional, transactionId }) => ({
-          price,
-          quantity,
-          notional,
-          transactionId,
-        })),
+    const accepted = {
+      order: {
+        externalId: request.externalId,
+        symbol: request.symbol,
+        side: request.side,
+        type: request.type,
+        limitPrice: limitPrice ?? null,
+        quantity: request.quantity,
+        filledQuantity,
+        status,
+        cancelReason,
       },
+      fills: fills.map(({ price, quantity, notional, transactionId }) => ({
+        price,
+        quantity,
+        notional,
+        transactionId,
+      })),
     };
+
+    if (request.onAccepted) await request.onAccepted(client, accepted);
+
+    return { commit: true, value: { status: 'accepted', ...accepted } };
   });
 }
 

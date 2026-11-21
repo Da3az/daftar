@@ -196,18 +196,30 @@ export async function ensureBots(pool: pg.Pool, count: number): Promise<string[]
   }
 }
 
+/**
+ * A participant as the routes need it: the session-facing fields, plus the ids
+ * and the public `handle` another guest can pay.
+ */
+export interface FoundParticipant extends Participant {
+  id: bigint;
+  cashAccountId: bigint;
+  handle: string;
+}
+
 export async function findParticipant(
   pool: pg.Pool,
   externalId: string,
-): Promise<(Participant & { id: bigint }) | null> {
+): Promise<FoundParticipant | null> {
   const { rows } = await pool.query<{
     id: bigint;
     external_id: string;
     kind: ParticipantKind;
     display_name: string;
     created_at: string;
+    cash_account_id: bigint;
+    handle: string;
   }>(
-    `SELECT id, external_id, kind, display_name, created_at
+    `SELECT id, external_id, kind, display_name, created_at, cash_account_id, handle
        FROM participants WHERE external_id = $1`,
     [externalId],
   );
@@ -221,5 +233,7 @@ export async function findParticipant(
     kind: row.kind,
     displayName: row.display_name,
     createdAt: row.created_at,
+    cashAccountId: row.cash_account_id,
+    handle: row.handle,
   };
 }

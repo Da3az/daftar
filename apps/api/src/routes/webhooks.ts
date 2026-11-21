@@ -18,6 +18,7 @@ import {
   type InboundEvent,
 } from '../webhooks/process.ts';
 import { post } from '../ledger/post.ts';
+import { enqueue } from '../outbox/worker.ts';
 import { webhookDeliveries, webhookDuplicates } from '../observability/metrics.ts';
 
 /**
@@ -555,6 +556,16 @@ async function fundAccount(
       // `processing`, and a replay in that window would get a 409 for work that
       // definitely succeeded.
       await settle(client, input.eventRowId, { state: 'processed', transactionId });
+
+      // And the outbox row, for the same reason: the feed that announces the
+      // deposit must not be able to disagree with the ledger about whether it
+      // happened.
+      await enqueue(client, {
+        transactionId,
+        accountId: customer,
+        eventType: 'deposit.credited',
+        payload: { amount: amountMinor.toString() },
+      });
     },
   });
 
