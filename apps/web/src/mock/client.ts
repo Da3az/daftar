@@ -896,7 +896,7 @@ export class MockApiClient implements ApiClient {
           cadence: request.cadence,
           everyMs: every,
           status: 'active',
-          nextRunAt: new Date(Math.floor(now / every) * every + every).toISOString(),
+          nextRunAt: null,
           bought: '0.00000000',
           spent: '0.00',
           averagePrice: null,

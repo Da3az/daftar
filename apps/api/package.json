@@ -20,7 +20,8 @@
     "start:workers": "node src/workers.ts",
     "kafka:topics": "node --env-file-if-exists=../../.env src/events/cli/topics.ts",
     "kafka:backfill": "node --env-file-if-exists=../../.env src/events/cli/backfill.ts",
-    "projections:replay": "node --env-file-if-exists=../../.env src/events/cli/replay.ts"
+    "projections:replay": "node --env-file-if-exists=../../.env src/events/cli/replay.ts",
+    "test:broker": "BROKER_TESTS=1 vitest run test/broker"
   },
   "dependencies": {
     "@daftar/money": "0.1.0",

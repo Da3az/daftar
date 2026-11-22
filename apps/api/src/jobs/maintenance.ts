@@ -20,13 +20,24 @@ export const WITHDRAWAL_SWEEP_ID = 'withdrawal-sweep';
 export const DCA_SYNC_ID = 'dca-sync';
 
 /**
- * The time a scheduler job was **meant** to run. BullMQ's scheduler jobs carry
- * it as `opts.prevMillis` (and in the id, `repeat:<scheduler>:<millis>`).
- * Falls back to the job's creation time for a job added by hand.
+ * The time a scheduler job was **meant** to run.
+ *
+ * BullMQ names each scheduler tick `repeat:<scheduler id>:<scheduled millis>`
+ * — that suffix is the tick's identity, and it is read from there. Not
+ * `job.timestamp`, which was the first version of this function and was wrong:
+ * the next tick's job is created when the previous one is taken, so its
+ * timestamp is the *previous* tick's run time. Observed on the first live run
+ * (two ticks a minute apart, both recorded at 12:25:09, distinct only by one
+ * millisecond); had they landed in the same millisecond the second run would
+ * have been deduplicated away. `opts.prevMillis` was not set on these jobs in
+ * BullMQ 6.7.8 either.
+ *
+ * Falls back to the creation time only for a job added by hand.
  */
 export function scheduledAt(job: Job): Date {
-  const prev = (job.opts as { prevMillis?: number }).prevMillis;
-  return new Date(typeof prev === 'number' && prev > 0 ? prev : job.timestamp);
+  const match = /^repeat:.+:(\d{10,})$/.exec(job.id ?? '');
+  if (match) return new Date(Number(match[1]));
+  return new Date(job.timestamp);
 }
 
 export async function declareMaintenanceSchedules(

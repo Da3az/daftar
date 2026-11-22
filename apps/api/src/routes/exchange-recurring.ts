@@ -44,9 +44,11 @@ const PlanOut = z.object({
   everyMs: z.number().int(),
   status: z.enum(['active', 'paused']),
   /**
-   * When the next run is due, if active. BullMQ aligns an `every` schedule to
-   * multiples of the interval since the epoch (`job-scheduler.js`), so this is
-   * computed the same way rather than read from Valkey.
+   * When the next run is due, if active: the last run's scheduled time plus
+   * the interval. BullMQ offsets each scheduler from the epoch by its creation
+   * time (seen as `offset` on the scheduler in Valkey), which the API does not
+   * read, so before the first run this is null — the first run is taken within
+   * one schedule sync (30 s) of creating or resuming the plan.
    */
   nextRunAt: z.string().nullable(),
   bought: QuantityOut,
@@ -76,10 +78,13 @@ export const recurringRoutes: FastifyPluginAsyncZod = async (app) => {
           cadence: cadenceOf(p.everyMs),
           everyMs: p.everyMs,
           status: p.status as 'active' | 'paused',
-          nextRunAt:
-            p.status === 'active'
-              ? new Date(Math.floor(now / p.everyMs) * p.everyMs + p.everyMs).toISOString()
-              : null,
+          nextRunAt: (() => {
+            const last = runs.get(p.id)?.[0];
+            if (p.status !== 'active' || !last) return null;
+            let next = Date.parse(last.scheduledFor) + p.everyMs;
+            while (next < now) next += p.everyMs;
+            return new Date(next).toISOString();
+          })(),
           bought: formatQuantity(t.quantity),
           spent: formatCash(t.notional),
           averagePrice:

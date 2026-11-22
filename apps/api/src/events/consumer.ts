@@ -107,7 +107,7 @@ const describe = (err: unknown): string =>
   (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(0, 1000);
 
 /** Apply one event transactionally. Returns whether it was new. */
-async function applyTransactional(
+export async function applyTransactional(
   pool: pg.Pool,
   consumer: ConsumerName,
   event: Envelope,

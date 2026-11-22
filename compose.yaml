@@ -90,30 +90,28 @@ services:
     image: redpandadata/redpanda:v26.2.7
     container_name: daftar-redpanda
     restart: unless-stopped
+    # The image's own /etc/redpanda/redpanda.yaml ships `developer_mode: true`,
+    # and in developer mode rpk adds `--unsafe-bypass-fsync` by itself — found
+    # on the first start of this file, in the broker's own log. So the start
+    # command turns developer mode off first. The memory/CPU flags are the
+    # container-friendly half of dev-container mode; the durability half
+    # (fsync bypass, write caching) is what is being refused.
+    entrypoint: ['/bin/bash', '-c']
     command:
-      - redpanda
-      - start
-      - --smp=1
-      # Redpanda's guidance is >= 2 GB per core. Set explicitly: by default it
-      # takes all the memory it can see, which in a container is the host's.
-      - --memory=2G
-      - --reserve-memory=0M
-      # Shared CPU in a container: no thread pinning, no busy-polling a core.
-      - --overprovisioned
-      # Host tuning checks (XFS, IRQ affinity, …) describe the host, not this
-      # container. Skipping them does not touch fsync.
-      - --check=false
-      - --node-id=0
-      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
-      - --rpc-addr=redpanda:33145
-      - --advertise-rpc-addr=redpanda:33145
-      # Applied on first bootstrap only; afterwards `rpk cluster config` owns
-      # them. Topics are created by `npm run kafka:topics`, never by a client
-      # (which is also what keeps this outside the BSL's restriction).
-      - --set=redpanda.auto_create_topics_enabled=false
-      - --set=redpanda.write_caching_default=false
-      - --default-log-level=warn
+      - >-
+        rpk redpanda config set redpanda.developer_mode false &&
+        exec rpk redpanda start
+        --smp=1
+        --memory=2G
+        --reserve-memory=0M
+        --overprovisioned
+        --check=false
+        --node-id=0
+        --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+        --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
+        --rpc-addr=redpanda:33145
+        --advertise-rpc-addr=redpanda:33145
+        --default-log-level=warn
     ports:
       - '127.0.0.1:19092:19092'
       # Admin API, for `rpk` from the host.
@@ -126,6 +124,8 @@ services:
       start_period: 10s
     volumes:
       - redpanda-data:/var/lib/redpanda/data
+      # Cluster properties for the first start (auto-create off, write caching off).
+      - ./deploy/redpanda/bootstrap.yaml:/etc/redpanda/.bootstrap.yaml:ro
 
   # The job queue's store. BullMQ's production requirements, each of which
   # fails silently if missed:

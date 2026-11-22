@@ -31,10 +31,11 @@
     "seed": "npm run -w @daftar/api seed --",
     "seed:verify": "npm run -w @daftar/api seed:verify",
     "broker:up": "docker compose up -d redpanda valkey",
-    "kafka:topics": "npm run -w @daftar/api kafka:topics",
+    "kafka:topics": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api kafka:topics",
     "kafka:backfill": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api kafka:backfill",
     "projections:replay": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api projections:replay --",
-    "dev:workers": "OUTBOX_WORKER_ENABLED=true OUTBOX_PUBLISHER=kafka CONSUMERS_ENABLED=true JOBS_ENABLED=true MARKET_TICKER_ENABLED=true DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api dev:workers"
+    "dev:workers": "OUTBOX_WORKER_ENABLED=true OUTBOX_PUBLISHER=kafka CONSUMERS_ENABLED=true JOBS_ENABLED=true MARKET_TICKER_ENABLED=true DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api dev:workers",
+    "test:broker": "npm run -w @daftar/api test:broker"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

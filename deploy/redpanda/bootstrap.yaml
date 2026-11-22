@@ -1,0 +1,12 @@
+# Cluster properties, applied on the cluster's FIRST start only — mounted as
+# /etc/redpanda/.bootstrap.yaml. Later edits are ignored; change a running
+# cluster with `rpk cluster config set`. (docs.redpanda.com, "Deploy for
+# Production: Manual" and the Docker quickstart.)
+
+# Topics come from `npm run kafka:topics`, never from a client: a typo'd topic
+# name must fail, and visitors must never cause topic creation.
+auto_create_topics_enabled: false
+
+# Acknowledge a write only once it is on disk. With write caching on, a hard
+# kill loses records the broker already acknowledged.
+write_caching_default: 'false'

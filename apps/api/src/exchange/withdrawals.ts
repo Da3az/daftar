@@ -408,6 +408,11 @@ function pgLiteral(value: string): string {
 
 /* --------------------------------------------- the two ways money moves on */
 
+async function finishedElsewhere(pool: pg.Pool, id: bigint): Promise<boolean> {
+  const now = await getWithdrawal(pool, id);
+  return now !== null && (now.state === 'confirmed' || now.state === 'released');
+}
+
 export type FinishOutcome = 'done' | 'noop';
 
 /**
@@ -451,8 +456,13 @@ export async function settle(pool: pg.Pool, id: bigint): Promise<FinishOutcome> 
       },
     });
     if (result.status !== 'posted') {
-      // The hold cannot be short of its own withdrawal unless something wrote
-      // to it outside this file — which the reconciler's hold check reports.
+      // Two runs racing: the ledger's balance check (under the account lock)
+      // runs before the compare-and-set inside the transaction, so the loser
+      // sees an empty hold rather than a confirmed state. Found by the
+      // concurrent-settle test. If another run finished it, this is a no-op.
+      if (await finishedElsewhere(pool, id)) return 'noop';
+      // Otherwise the hold is short of its own withdrawal, which only a write
+      // around this file can cause — and the reconciler's hold check reports.
       throw new Error(`settlement refused by the ledger: ${result.status}`);
     }
     return 'done';
@@ -512,8 +522,11 @@ export async function release(
         });
       },
     });
-    if (result.status !== 'posted')
+    if (result.status !== 'posted') {
+      // The same race as in `settle`.
+      if (await finishedElsewhere(pool, id)) return 'noop';
       throw new Error(`release refused by the ledger: ${result.status}`);
+    }
     return 'done';
   } catch (err) {
     if (err instanceof NotApplicable) return 'noop';

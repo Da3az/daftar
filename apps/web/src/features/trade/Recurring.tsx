@@ -46,7 +46,13 @@ function PlanRow({ plan }: { plan: RecurringPlan }) {
         <span className="text-sm text-ink-2">
           {plan.status === 'active' ? (
             <>
-              next <Num>{plan.nextRunAt ? showDateTime(plan.nextRunAt) : '—'}</Num> UTC
+              {plan.nextRunAt ? (
+                <>
+                  next <Num>{showDateTime(plan.nextRunAt)}</Num> UTC
+                </>
+              ) : (
+                'first run within 30 seconds'
+              )}
             </>
           ) : (
             'paused'
