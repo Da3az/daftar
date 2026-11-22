@@ -59,5 +59,6 @@ export const OPENAPI_DOCUMENT: NonNullable<FastifyDynamicSwaggerOptions['openapi
     { name: 'ledger', description: 'Entries, transactions and statements' },
     { name: 'webhooks', description: 'Inbound provider events' },
     { name: 'chaos', description: 'Server-side concurrency bursts for the demo' },
+    { name: 'admin', description: 'Operator routes behind ADMIN_TOKEN; 404 when it is unset' },
   ],
 };

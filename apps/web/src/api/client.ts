@@ -1,6 +1,9 @@
 import type {
   ActivityResponse,
   ApiErrorBody,
+  EquityRange,
+  EquityResponse,
+  Position,
   CandleInterval,
   CandlesResponse,
   CashAmount,
@@ -95,4 +98,8 @@ export interface ApiClient {
   lookupRecipient(handle: string): Promise<Recipient>;
   /** GET /v1/exchange/activity — newest first. */
   getActivity(limit?: number): Promise<ActivityResponse>;
+  /** GET /v1/exchange/position — average entry and P&L, from the positions projection. */
+  getPosition(): Promise<Position>;
+  /** GET /v1/exchange/equity — snapshot series; missed slots are absent, not interpolated. */
+  getEquity(range: EquityRange): Promise<EquityResponse>;
 }

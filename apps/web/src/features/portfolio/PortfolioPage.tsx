@@ -23,6 +23,7 @@ import { GuestEntry } from '../GuestEntry';
 import { ActivityFeed } from '../history/HistoryPage';
 import { holdingsOf } from '../trade/YourMoney';
 import { CashPanel } from './CashPanel';
+import { EquityPanel, PositionPanel } from './PositionPanels';
 
 function SumRow({
   sign,
@@ -259,6 +260,9 @@ export function PortfolioPage() {
         </dl>
         <Sums me={guest} lastPrice={lastPrice} />
       </Panel>
+
+      <PositionPanel />
+      <EquityPanel />
 
       <div className="grid items-start gap-6 md:gap-7 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <CashPanel me={guest} />

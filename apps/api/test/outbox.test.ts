@@ -374,6 +374,7 @@ describe('retries, backoff and the dead letter', () => {
       attempts: 1,
       maxAttempts: 3,
       shard: 0,
+      createdAt: new Date().toISOString(),
     };
 
     expect(await markFailed(ctx.pool, event, new Error('nope'))).toBe('retry');

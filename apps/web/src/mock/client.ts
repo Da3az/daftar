@@ -2,6 +2,9 @@ import { ApiError, NetworkError, type ApiClient } from '@/api/client';
 import type {
   ActivityResponse,
   ApiErrorBody,
+  EquityRange,
+  EquityResponse,
+  Position,
   CandleInterval,
   CandlesResponse,
   CashAmount,
@@ -17,6 +20,7 @@ import type {
   Recipient,
 } from '@/api/types';
 import { formatCash, parseCash } from '@/lib/money';
+import { EquityRecorder, positionFromFills } from './projections';
 import { devSwitches, type ForcedCashError, type ForcedOrderError } from './devSwitches';
 import { MAX_DEPOSIT, type EngineResult, type MatchingEngine, type ParticipantId } from './engine';
 
@@ -283,6 +287,7 @@ export class MockApiClient implements ApiClient {
   readonly #guests = new SlidingWindow(20, 3_600_000);
   readonly #deposits = new SlidingWindow(10, 3_600_000);
   readonly #idempotency = new Map<string, IdempotencyRecord>();
+  readonly #equity = new EquityRecorder();
 
   constructor(opts: { engine: () => MatchingEngine }) {
     this.#engine = opts.engine;
@@ -304,6 +309,7 @@ export class MockApiClient implements ApiClient {
 
   engineReplaced(): void {
     this.#idempotency.clear();
+    this.#equity.clear();
   }
 
   // ---------------------------------------------------------------- plumbing
@@ -762,6 +768,34 @@ export class MockApiClient implements ApiClient {
     return this.#sessionRead(
       (engine, id) => engine.getActivity(id, limit ?? 50),
       () => check(intIssue(limit, 'limit', 1, 200)),
+    );
+  }
+
+  // ---------------------------------------------------------------- projections
+  getPosition(): Promise<Position> {
+    return this.#sessionRead(
+      (engine, id) => {
+        const market = engine.getMarket(1, 1);
+        return positionFromFills(
+          engine.listFills(id, 500),
+          market.market.symbol,
+          market.market.lastPrice,
+        );
+      },
+      () => undefined,
+    );
+  }
+
+  getEquity(range: EquityRange): Promise<EquityResponse> {
+    return this.#sessionRead(
+      (engine, id) => {
+        const market = engine.getMarket(1, 1);
+        const points = this.#equity.record(engine.getMe(id), market.market.lastPrice, engine.now());
+        const span = { '1d': 86_400_000, '7d': 7 * 86_400_000, '30d': 30 * 86_400_000 }[range];
+        const since = engine.now() - span;
+        return { points: points.filter((p) => Date.parse(p.at) >= since) };
+      },
+      () => undefined,
     );
   }
 }

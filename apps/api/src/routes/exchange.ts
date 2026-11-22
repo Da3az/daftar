@@ -119,12 +119,12 @@ const PROVIDER_RETRY_DELAY_MS = 40;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-const QuantityOut = z
+export const QuantityOut = z
   .string()
   .regex(/^\d+\.\d{8}$/)
   .describe('Asset quantity as an exact decimal string, 8 fractional digits.');
 
-const SymbolQuery = z.object({
+export const SymbolQuery = z.object({
   symbol: z.string().min(1).max(16).default(DEFAULT_MARKET),
 });
 
@@ -278,7 +278,7 @@ const ActivityOut = z.object({
     ),
 });
 
-const ErrorOut = z.object({
+export const ErrorOut = z.object({
   error: z.string(),
   message: z.string(),
   unit: z.string().optional(),
@@ -291,7 +291,7 @@ const ErrorOut = z.object({
     .describe('On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.'),
 });
 
-const UNAUTHENTICATED = {
+export const UNAUTHENTICATED = {
   error: 'not_a_guest',
   message: 'no guest session; POST /v1/exchange/guest to enter',
 } as const;
@@ -306,7 +306,7 @@ const clamp = (value: bigint): bigint => (value < 0n ? 0n : value);
  * attacker-chosen, and looking it up would let anyone probe which guest ids
  * exist at one indexed read each.
  */
-async function authenticate(pool: pg.Pool, request: FastifyRequest) {
+export async function authenticate(pool: pg.Pool, request: FastifyRequest) {
   const token = readCookie(request.headers.cookie, GUEST_COOKIE);
   if (token === null) return null;
 

@@ -38,6 +38,8 @@ export interface OutboxEvent {
   attempts: number;
   maxAttempts: number;
   shard: number;
+  /** When the ledger transaction committed the row: when the money moved. */
+  createdAt: string;
 }
 
 /** What a publisher must satisfy. Deliberately tiny. */
@@ -143,6 +145,7 @@ export async function claimBatch(options: WorkerOptions): Promise<OutboxEvent[]>
       attempts: number;
       max_attempts: number;
       shard: number;
+      created_at: string;
     }>(
       `WITH claimed AS (
          SELECT id FROM outbox
@@ -161,7 +164,7 @@ export async function claimBatch(options: WorkerOptions): Promise<OutboxEvent[]>
          FROM claimed c
         WHERE o.id = c.id
         RETURNING o.id, o.transaction_id, o.account_id, o.event_type, o.payload,
-                  o.attempts, o.max_attempts, o.shard`,
+                  o.attempts, o.max_attempts, o.shard, o.created_at`,
       [options.shards, batchSize, options.workerId],
     );
 
@@ -180,6 +183,7 @@ export async function claimBatch(options: WorkerOptions): Promise<OutboxEvent[]>
           attempts: r.attempts,
           maxAttempts: r.max_attempts,
           shard: r.shard,
+          createdAt: r.created_at,
         }))
         // Re-sorted defensively: the UPDATE ... FROM above has no guaranteed
         // output order, and the ordering guarantee must not depend on one.
@@ -365,7 +369,7 @@ export async function lag(pool: pg.Pool): Promise<OutboxLag> {
 export async function publishAfterCommitNaive(options: {
   pool: pg.Pool;
   publish: Publisher;
-  event: Omit<OutboxEvent, 'id' | 'attempts' | 'maxAttempts' | 'shard'>;
+  event: Omit<OutboxEvent, 'id' | 'attempts' | 'maxAttempts' | 'shard' | 'createdAt'>;
   /** Awaited after the commit and before the publish. Throw to simulate a crash. */
   killBetween?: () => Promise<void>;
 }): Promise<void> {
@@ -389,5 +393,6 @@ export async function publishAfterCommitNaive(options: {
     attempts: 0,
     maxAttempts: 1,
     shard: Number(options.event.accountId % BigInt(SHARD_COUNT)),
+    createdAt: new Date().toISOString(),
   });
 }

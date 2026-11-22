@@ -1,10 +1,17 @@
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useApi } from './context';
-import type { CandleInterval } from './types';
+import type { CandleInterval, EquityRange } from './types';
 
 /* Polling cadences. Live but polled: a failed refresh keeps the last good data on screen
    (TanStack Query keeps `data` when a refetch errors) and the next tick simply tries again. */
-export const POLL = { market: 1000, session: 2000, activity: 2000, history: 5000 } as const;
+export const POLL = {
+  market: 1000,
+  session: 2000,
+  activity: 2000,
+  history: 5000,
+  position: 5000,
+  equity: 60_000,
+} as const;
 
 export const keys = {
   market: ['market'] as const,
@@ -13,6 +20,8 @@ export const keys = {
   orders: ['orders'] as const,
   fills: ['fills'] as const,
   activity: ['activity'] as const,
+  position: ['position'] as const,
+  equity: (range: EquityRange) => ['equity', range] as const,
 };
 
 const common = { retry: false, refetchOnWindowFocus: true, staleTime: 0 } as const;
@@ -88,11 +97,37 @@ export function useActivity() {
   });
 }
 
+/** From the positions projection: may trail the ledger by the consumer's lag. */
+export function usePosition() {
+  const api = useApi();
+  const enabled = useHasSession();
+  return useQuery({
+    queryKey: keys.position,
+    queryFn: () => api.getPosition(),
+    refetchInterval: POLL.position,
+    enabled,
+    ...common,
+  });
+}
+
+/** Snapshots arrive every few minutes; polling faster would only refetch the same points. */
+export function useEquity(range: EquityRange) {
+  const api = useApi();
+  const enabled = useHasSession();
+  return useQuery({
+    queryKey: keys.equity(range),
+    queryFn: () => api.getEquity(range),
+    refetchInterval: POLL.equity,
+    enabled,
+    ...common,
+  });
+}
+
 /** After something the guest did: refresh everything that could have changed, now rather than on the next tick. */
 export function useRefreshSession(): () => void {
   const client = useQueryClient();
   return () => {
-    for (const key of [keys.me, keys.orders, keys.fills, keys.activity, keys.market])
+    for (const key of [keys.me, keys.orders, keys.fills, keys.activity, keys.market, keys.position])
       void client.invalidateQueries({ queryKey: key });
   };
 }

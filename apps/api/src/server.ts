@@ -60,12 +60,21 @@ const bots = env.EXCHANGE_BOTS_ENABLED
  * The outbox worker, on the same opt-in terms as the bots. With it off, events
  * still commit with the money that caused them; they wait.
  */
-const outbox = env.OUTBOX_WORKER_ENABLED
-  ? (await import('./outbox/runner.ts')).startOutboxWorker(pool, {
-      pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
-      log: app.log,
-    })
-  : null;
+/*
+ * Only in `direct` mode. As a relay to the event log the worker belongs to
+ * the worker process (`workers.ts`), which owns the producer; running it here
+ * too would split each account's events between two claimers.
+ */
+if (env.OUTBOX_WORKER_ENABLED && env.OUTBOX_PUBLISHER === 'kafka') {
+  app.log.warn('OUTBOX_PUBLISHER=kafka: the relay runs in the worker process, not the API');
+}
+const outbox =
+  env.OUTBOX_WORKER_ENABLED && env.OUTBOX_PUBLISHER === 'direct'
+    ? (await import('./outbox/runner.ts')).startOutboxWorker(pool, {
+        pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+        log: app.log,
+      })
+    : null;
 
 /**
  * Graceful shutdown, in the order that matters: stop accepting connections and

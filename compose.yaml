@@ -71,5 +71,110 @@ services:
       # (unused mount/volume)".
       - db-data:/var/lib/postgresql
 
+  # The event log. PostgreSQL's outbox stays the source of truth; this is the
+  # relay's destination and the projections' replay source.
+  #
+  # v26.2.x, not 26.3.x: 26.3 is the first release under the Community Edition
+  # licence, whose "internal business purposes" grant does not obviously cover
+  # a public demo. 26.2 is BSL 1.1, whose only restriction is a commercial
+  # streaming service where third parties create topics. Supported until
+  # 2027-07-28 — see claude-plans / decisions.md for the revisit.
+  #
+  # **Not `--mode dev-container`.** That mode adds `--unsafe-bypass-fsync` and
+  # turns write caching on, and a hard kill then loses records the broker had
+  # already acknowledged — which would make every "nothing lost" measurement
+  # here a measurement of luck. The flags below are the parts of dev-container
+  # that are about running in a shared container, without the parts that are
+  # about durability.
+  redpanda:
+    image: redpandadata/redpanda:v26.2.7
+    container_name: daftar-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      # Redpanda's guidance is >= 2 GB per core. Set explicitly: by default it
+      # takes all the memory it can see, which in a container is the host's.
+      - --memory=2G
+      - --reserve-memory=0M
+      # Shared CPU in a container: no thread pinning, no busy-polling a core.
+      - --overprovisioned
+      # Host tuning checks (XFS, IRQ affinity, …) describe the host, not this
+      # container. Skipping them does not touch fsync.
+      - --check=false
+      - --node-id=0
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+      # Applied on first bootstrap only; afterwards `rpk cluster config` owns
+      # them. Topics are created by `npm run kafka:topics`, never by a client
+      # (which is also what keeps this outside the BSL's restriction).
+      - --set=redpanda.auto_create_topics_enabled=false
+      - --set=redpanda.write_caching_default=false
+      - --default-log-level=warn
+    ports:
+      - '127.0.0.1:19092:19092'
+      # Admin API, for `rpk` from the host.
+      - '127.0.0.1:19644:9644'
+    healthcheck:
+      test: ['CMD-SHELL', 'rpk cluster health --exit-when-healthy -X brokers=localhost:9092']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+  # The job queue's store. BullMQ's production requirements, each of which
+  # fails silently if missed:
+  #
+  # - `noeviction`: any other policy lets Valkey delete queue keys under
+  #   memory pressure — jobs vanish with no error anywhere.
+  # - AOF on: an RDB snapshot alone loses everything since the last one.
+  #   `everysec` loses up to ~1 s of writes on a crash, which is why nothing in
+  #   this system relies on Valkey for a guarantee — Postgres sweepers re-enqueue
+  #   anything a lost job would have done.
+  valkey:
+    image: valkey/valkey:9.2.0-alpine
+    container_name: daftar-valkey
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - '127.0.0.1:56379:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - valkey-data:/data
+
+  # Optional UI for the event log. Dev only, never deployed: the v2 line is end
+  # of life and v3's licence has not been checked.
+  #   docker compose --profile console up -d redpanda-console
+  redpanda-console:
+    image: redpandadata/console:v3.15.0
+    profiles: ['console']
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - '127.0.0.1:18080:8080'
+
 volumes:
   db-data:
+  redpanda-data:
+  valkey-data:

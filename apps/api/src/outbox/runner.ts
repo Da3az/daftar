@@ -1,5 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type pg from 'pg';
+import type { StringProducer } from '../events/kafka.ts';
+import { relayOnce } from './relay.ts';
 import { allShards, drainOnce, reap, reclaimStale, type Publisher } from './worker.ts';
 
 /**
@@ -51,6 +53,15 @@ export const activityPublisher =
 export interface OutboxRunnerOptions {
   pollIntervalMs: number;
   log: FastifyBaseLogger;
+  /**
+   * `direct` writes the activity feed itself, as before the event log
+   * existed. `kafka` relays to the events topic (see `relay.ts`), and the
+   * feed becomes a consumer.
+   */
+  publisher?: { kind: 'direct' } | { kind: 'kafka'; producer: StringProducer; topic: string };
+  batchSize?: number;
+  /** Identifies this process in `claimed_by`. */
+  workerId?: string;
 }
 
 export interface OutboxRunner {
@@ -63,8 +74,11 @@ const HOUSEKEEPING_EVERY = 60;
 
 export function startOutboxWorker(pool: pg.Pool, options: OutboxRunnerOptions): OutboxRunner {
   const { log, pollIntervalMs } = options;
-  const workerId = `api-${String(process.pid)}`;
+  const workerId = options.workerId ?? `api-${String(process.pid)}`;
+  const publisher = options.publisher ?? { kind: 'direct' };
   const publish = activityPublisher(pool);
+  const batchSize = options.batchSize ?? 25;
+  let outageStreak = 0;
 
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
@@ -80,7 +94,30 @@ export function startOutboxWorker(pool: pg.Pool, options: OutboxRunnerOptions): 
       if (reclaimed > 0 || reaped > 0) log.info({ reclaimed, reaped }, 'outbox housekeeping');
     }
 
-    const result = await drainOnce({ pool, publish, shards: allShards(), workerId });
+    if (publisher.kind === 'kafka') {
+      try {
+        const result = await relayOnce(
+          {
+            pool,
+            shards: allShards(),
+            workerId,
+            batchSize,
+            producer: publisher.producer,
+            topic: publisher.topic,
+          },
+          outageStreak,
+        );
+        if (outageStreak > 0)
+          log.info({ outage_cycles: outageStreak }, 'relay: broker reachable again');
+        outageStreak = 0;
+        return result.claimed;
+      } catch (err) {
+        outageStreak += 1;
+        throw err;
+      }
+    }
+
+    const result = await drainOnce({ pool, publish, shards: allShards(), workerId, batchSize });
     if (result.dead > 0) log.error({ dead: result.dead }, 'outbox events dead-lettered');
     return result.claimed;
   };
@@ -96,7 +133,7 @@ export function startOutboxWorker(pool: pg.Pool, options: OutboxRunnerOptions): 
     timer = setTimeout(() => {
       timer = null;
       inFlight = cycle()
-        .then((claimed) => (claimed >= 25 ? 0 : pollIntervalMs))
+        .then((claimed) => (claimed >= batchSize ? 0 : pollIntervalMs))
         .catch((err: unknown) => {
           // Caught, always: `server.ts` exits on an unhandled rejection, and a
           // database blip must not take the API down with the worker.

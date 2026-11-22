@@ -260,6 +260,41 @@ export interface ActivityResponse {
   events: ActivityEvent[];
 }
 
+// ----------------------------------------------------------------- projections
+/** GET /v1/exchange/position — from the positions projection, so it can lag the ledger. */
+export interface Position {
+  symbol: string;
+  quantity: Quantity;
+  /** What the coins still held cost, average-cost method. */
+  costBasis: CashAmount;
+  /** null for a flat position. */
+  averageEntryPrice: CashAmount | null;
+  lastPrice: CashAmount;
+  marketValue: CashAmount;
+  /** Signed. Fixed by sells already made. */
+  realisedPnl: CashAmount;
+  /** Signed. marketValue − costBasis. */
+  unrealisedPnl: CashAmount;
+  buys: number;
+  sells: number;
+  lastEventId: string | null;
+  /** When the projection last changed; null if it has never seen a fill. */
+  asOf: Timestamp | null;
+}
+
+export type EquityRange = '1d' | '7d' | '30d';
+
+export interface EquityPoint {
+  at: Timestamp;
+  equity: CashAmount;
+  /** Signed. The gap to `equity` is profit or loss at that moment. */
+  netContributed: CashAmount;
+}
+
+export interface EquityResponse {
+  points: EquityPoint[];
+}
+
 // ----------------------------------------------------------------- errors
 export interface ApiErrorBody {
   error: string;

@@ -2,6 +2,9 @@ import { ApiError, NetworkError, type ApiClient } from './client';
 import type {
   ActivityResponse,
   ApiErrorBody,
+  EquityRange,
+  EquityResponse,
+  Position,
   CandleInterval,
   CandlesResponse,
   CashAmount,
@@ -204,5 +207,13 @@ export class HttpApiClient implements ApiClient {
 
   async getActivity(limit?: number): Promise<ActivityResponse> {
     return (await this.#send('GET', '/activity', { query: { limit } })).body as ActivityResponse;
+  }
+
+  async getPosition(): Promise<Position> {
+    return (await this.#send('GET', '/position')).body as Position;
+  }
+
+  async getEquity(range: EquityRange): Promise<EquityResponse> {
+    return (await this.#send('GET', '/equity', { query: { range } })).body as EquityResponse;
   }
 }

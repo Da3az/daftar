@@ -221,6 +221,70 @@ export const outboxGauge = new Gauge({
   registers: [registry],
 });
 
+/**
+ * The relay: outbox rows produced to the event log, by outcome. `transient`
+ * is a broker that could not be reached — the batch went back to `pending`.
+ */
+export const relayBatches = new Counter({
+  name: 'daftar_relay_batches_total',
+  help: 'Outbox relay produce batches, by outcome (published / transient / failed).',
+  labelNames: ['outcome'],
+  registers: [registry],
+});
+
+export const relayEvents = new Counter({
+  name: 'daftar_relay_events_total',
+  help: 'Outbox rows acknowledged by the broker.',
+  registers: [registry],
+});
+
+/**
+ * Per-consumer message outcomes. `consumer` is a fixed set of group names;
+ * `outcome` is applied / duplicate / skipped / dead.
+ */
+export const consumerMessages = new Counter({
+  name: 'daftar_consumer_messages_total',
+  help: 'Messages handled by each event-log consumer, by outcome.',
+  labelNames: ['consumer', 'outcome'],
+  registers: [registry],
+});
+
+/**
+ * Commit-to-apply latency: the outbox row's `created_at` to the moment the
+ * consumer's transaction committed. Includes relay lag, broker time and
+ * consumer time — the number a user experiences as "the feed is late".
+ */
+export const consumerLagSeconds = new Histogram({
+  name: 'daftar_consumer_event_age_seconds',
+  help: 'Age of an event (since the money moved) when a consumer applied it.',
+  labelNames: ['consumer'],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 300, 1800],
+  registers: [registry],
+});
+
+/** BullMQ job outcomes. `queue` and `outcome` are both fixed sets. */
+export const jobOutcomes = new Counter({
+  name: 'daftar_jobs_total',
+  help: 'Background jobs by queue and outcome (completed / failed / retried / noop).',
+  labelNames: ['queue', 'outcome'],
+  registers: [registry],
+});
+
+/** Reconciler findings by kind — any non-zero rate is an alert. */
+export const reconcileFindings = new Counter({
+  name: 'daftar_reconcile_findings_total',
+  help: 'Projection-vs-ledger divergences found by the reconciler, by kind.',
+  labelNames: ['kind'],
+  registers: [registry],
+});
+
+/** Open live-push connections, per instance. */
+export const streamConnections = new Gauge({
+  name: 'daftar_stream_connections',
+  help: 'Open server-sent-event connections on this instance.',
+  registers: [registry],
+});
+
 /** Serve the registry. */
 export const metricsText = (): Promise<string> => registry.metrics();
 export const metricsContentType = registry.contentType;

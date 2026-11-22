@@ -252,6 +252,90 @@ const schema = z.object({
   /** Pause between outbox polls when the last one found less than a full batch. */
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(50).default(1_000),
 
+  /**
+   * Where the outbox worker publishes.
+   *
+   * `direct` is the original behaviour — the worker writes the activity feed
+   * itself — and stays the default so that nothing needs Redpanda running.
+   * `kafka` makes the worker a relay to the event log; the feed is then one
+   * consumer among several.
+   */
+  OUTBOX_PUBLISHER: z.enum(['direct', 'kafka']).default('direct'),
+
+  /** Rows claimed per relay cycle. One produce request per batch. */
+  OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1_000).default(100),
+
+  /** Comma-separated `host:port` list. */
+  KAFKA_BROKERS: z
+    .string()
+    .default('127.0.0.1:19092')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
+
+  /**
+   * Prefix for every topic and consumer group name. Lets the broker test suite
+   * give each test file its own namespace on one broker, the way each file
+   * gets its own database.
+   */
+  KAFKA_NAMESPACE: z
+    .string()
+    .regex(/^[a-z0-9.-]+$/)
+    .default('daftar'),
+
+  /** A `redis://` URL. Valkey speaks the same protocol. */
+  REDIS_URL: z.string().min(1).default('redis://127.0.0.1:56379'),
+
+  /** BullMQ key prefix, for the same reason as `KAFKA_NAMESPACE`. */
+  BULLMQ_PREFIX: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .default('daftar'),
+
+  /**
+   * Components of the worker process (`src/workers.ts`). Each is off by
+   * default, for the bots' reason: they write.
+   */
+  CONSUMERS_ENABLED: boolish.default(false),
+  JOBS_ENABLED: boolish.default(false),
+  MARKET_TICKER_ENABLED: boolish.default(false),
+
+  /** Size of the worker process's own pool — see docs/infrastructure.md. */
+  WORKERS_DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(8),
+
+  /** Loopback port for the worker process's `/metrics`. 0 disables it. */
+  WORKERS_METRICS_PORT: z.coerce.number().int().min(0).max(65535).default(9465),
+
+  /** Every this many ms, the positions reconciler sweeps dirty accounts. */
+  RECONCILE_INTERVAL_MS: z.coerce.number().int().min(100).default(5_000),
+
+  /** Equity snapshot cadence. */
+  EQUITY_SNAPSHOT_EVERY_MS: z.coerce.number().int().min(10_000).default(300_000),
+
+  /**
+   * Withdrawals at or above this amount (minor units) wait for a human.
+   * Default 5,000.00.
+   */
+  WITHDRAWAL_REVIEW_THRESHOLD: z.coerce.bigint().min(1n).default(500_000n),
+
+  /** Rail submissions allowed per second, across all workers. */
+  RAIL_SUBMIT_RATE_PER_SECOND: z.coerce.number().int().min(1).default(5),
+
+  /**
+   * How long a submitted withdrawal may stay unconfirmed before it goes to
+   * review rather than being polled again.
+   */
+  RAIL_POLL_DEADLINE_MS: z.coerce.number().int().min(1_000).default(600_000),
+
+  /**
+   * Bearer token for `/v1/admin/*`. Unset means the admin routes answer 404:
+   * there is no fallback value, because a known admin token is no gate.
+   */
+  ADMIN_TOKEN: z.string().min(24).optional(),
+
   OTEL_ENABLED: boolish.default(false),
 
   /**

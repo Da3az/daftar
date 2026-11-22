@@ -181,6 +181,113 @@ services:
     mem_limit: 512m
     mem_reservation: 256m
 
+  # The worker process: outbox relay, event-log consumers, BullMQ workers.
+  # Same image as the API, different entrypoint. Every component is opt-in.
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    command:
+      ['node', '--max-old-space-size=256', '--max-semi-space-size=16', 'apps/api/dist/workers.js']
+    # The API's healthcheck probes :3000, which this process does not serve.
+    healthcheck:
+      disable: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/daftar
+      WORKERS_DB_POOL_MAX: '8'
+      LOG_LEVEL: info
+      KAFKA_BROKERS: redpanda:9092
+      REDIS_URL: redis://valkey:6379
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:?WEBHOOK_SIGNING_SECRET is required}
+      CHAOS_TOKEN_SECRET: ${CHAOS_TOKEN_SECRET:?CHAOS_TOKEN_SECRET is required}
+      GUEST_SESSION_SECRET: ${GUEST_SESSION_SECRET:?GUEST_SESSION_SECRET is required}
+      OUTBOX_WORKER_ENABLED: ${OUTBOX_WORKER_ENABLED:-false}
+      OUTBOX_PUBLISHER: ${OUTBOX_PUBLISHER:-kafka}
+      CONSUMERS_ENABLED: ${CONSUMERS_ENABLED:-false}
+      JOBS_ENABLED: ${JOBS_ENABLED:-false}
+      MARKET_TICKER_ENABLED: ${MARKET_TICKER_ENABLED:-false}
+      OTEL_ENABLED: 'false'
+    # 384 MB against a 256 MB heap: consumers buffer at most 64 messages each.
+    mem_limit: 384m
+    mem_reservation: 192m
+
+  # Production mode, not dev-container: fsync on, write caching off. See
+  # compose.yaml for why each flag is there. v26.2.x for the licence reason
+  # recorded there.
+  redpanda:
+    image: redpandadata/redpanda:v26.2.7
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      # Below Redpanda's >= 2 GB/core guidance would be below what it is
+      # tested at; 2 GB is the guidance exactly, for one core.
+      - --memory=2G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --check=false
+      - --node-id=0
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --set=redpanda.auto_create_topics_enabled=false
+      - --set=redpanda.write_caching_default=false
+      - --default-log-level=warn
+    expose:
+      - '9092'
+    healthcheck:
+      test: ['CMD-SHELL', 'rpk cluster health --exit-when-healthy -X brokers=localhost:9092']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    # --memory=2G is Seastar's own allocation; the cap leaves headroom for
+    # the process outside it.
+    mem_limit: 2560m
+    mem_reservation: 2048m
+
+  valkey:
+    image: valkey/valkey:9.2.0-alpine
+    restart: unless-stopped
+    command:
+      [
+        'valkey-server',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory',
+        '256mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    expose:
+      - '6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - valkey-data:/data
+    # maxmemory 256 MB of data; AOF rewrite forks, so the cap allows for a
+    # copy-on-write second image.
+    mem_limit: 512m
+    mem_reservation: 256m
+
   caddy:
     image: caddy:2.11-alpine
     restart: unless-stopped
@@ -220,3 +327,5 @@ volumes:
   wal-archive:
   caddy-data:
   caddy-config:
+  redpanda-data:
+  valkey-data:

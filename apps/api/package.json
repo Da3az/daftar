@@ -15,7 +15,12 @@
     "db:migrate": "node --env-file-if-exists=../../.env src/db/migrate.ts",
     "openapi:dump": "node --env-file-if-exists=../../.env src/openapi/dump.ts",
     "seed": "node --env-file-if-exists=../../.env src/seed/seed.ts",
-    "seed:verify": "node --env-file-if-exists=../../.env src/seed/verify.ts"
+    "seed:verify": "node --env-file-if-exists=../../.env src/seed/verify.ts",
+    "dev:workers": "node --env-file-if-exists=../../.env --watch src/workers.ts",
+    "start:workers": "node src/workers.ts",
+    "kafka:topics": "node --env-file-if-exists=../../.env src/events/cli/topics.ts",
+    "kafka:backfill": "node --env-file-if-exists=../../.env src/events/cli/backfill.ts",
+    "projections:replay": "node --env-file-if-exists=../../.env src/events/cli/replay.ts"
   },
   "dependencies": {
     "@daftar/money": "0.1.0",
@@ -34,10 +39,13 @@
     "@opentelemetry/sdk-node": "0.301.2",
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "@opentelemetry/semantic-conventions": "1.45.0",
+    "@platformatic/kafka": "2.17.0",
+    "bullmq": "6.7.8",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
     "fastify-plugin": "6.0.1",
     "import-in-the-middle": "3.6.0",
+    "ioredis": "6.0.0",
     "pg": "8.23.1",
     "pg-copy-streams": "7.0.0",
     "pino": "10.4.0",
