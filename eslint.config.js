@@ -102,6 +102,14 @@ export default tseslint.config(
     },
   },
 
+  // The `.mjs` measurement scripts in load/ run under Node (they import the
+  // application's own modules), unlike the k6 `.js` scripts beside them.
+  {
+    files: ['load/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { 'no-console': 'off' },
+  },
+
   {
     files: [
       'apps/api/**/*.ts',

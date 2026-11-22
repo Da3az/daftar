@@ -56,7 +56,7 @@ const place = async (participant, side) => {
     });
     const key = result.status === 'accepted' ? 'filled' : result.status;
     outcomes[key] = (outcomes[key] ?? 0) + 1;
-  } catch (err) {
+  } catch {
     outcomes.error = (outcomes.error ?? 0) + 1;
   }
 };

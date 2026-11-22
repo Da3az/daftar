@@ -58,9 +58,8 @@ for (let i = 0; i < N; i++) {
 }
 process.stdout.write(`requested ${N} withdrawals with chaos ${JSON.stringify(chaos)}\n`);
 
-let rows = [];
 for (let i = 0; i < 900; i++) {
-  rows = await q(
+  const rows = await q(
     `SELECT state, count(*)::int AS n FROM withdrawals WHERE id > $1::bigint GROUP BY state`,
     [startId.toString()],
   );

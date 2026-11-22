@@ -39,7 +39,7 @@ for (const t of targets) {
 process.stdout.write(`injected ${ids.length} drifts\n`);
 
 const deadline = Date.now() + 180_000;
-let rows = [];
+let rows;
 while (Date.now() < deadline) {
   ({ rows } = await pool.query(
     `SELECT id, (extract(epoch FROM detected_at - injected_at) * 1000)::int AS ttd_ms
