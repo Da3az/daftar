@@ -296,11 +296,15 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   });
 
   await app.register(healthRoutes);
-  await app.register(accountRoutes);
-  await app.register(orderRoutes);
+  // The legacy API is unauthenticated; off by default in production (env.ts).
+  if (env.LEGACY_API_ENABLED) {
+    await app.register(accountRoutes);
+    await app.register(orderRoutes);
+    await app.register(reportRoutes);
+    await app.register(chaosRoutes);
+  }
+  // Always: the exchange's deposits are delivered through it.
   await app.register(webhookRoutes);
-  await app.register(reportRoutes);
-  await app.register(chaosRoutes);
   await app.register(exchangeRoutes);
   await app.register(portfolioRoutes);
   await app.register(withdrawalRoutes);

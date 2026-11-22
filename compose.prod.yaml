@@ -61,7 +61,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: daftar
-      POSTGRES_DB: daftar
+      # `daftar` is the measured benchmark stack; an exchange deployment sets
+      # DAFTAR_DB_NAME=daftar_exchange so it never shares the seeded dataset.
+      POSTGRES_DB: ${DAFTAR_DB_NAME:-daftar}
       # From a file, never inline and never from the host environment. A
       # `POSTGRES_PASSWORD` in compose is visible in `docker inspect`, in the
       # process list, and in anyone's shell history.
@@ -122,7 +124,7 @@ services:
       - db-data:/var/lib/postgresql
       - wal-archive:/wal-archive
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U daftar -d daftar']
+      test: ['CMD-SHELL', 'pg_isready -U daftar -d $${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -147,7 +149,7 @@ services:
       PORT: '3000'
       # Service name, not an IP. Compose's DNS resolves it, and it survives the
       # database container being recreated with a different address.
-      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/daftar
+      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DAFTAR_DB_NAME:-daftar}
       # 20 against max_connections=50. See the arithmetic above.
       DB_POOL_MAX: '20'
       LOG_LEVEL: info
@@ -172,6 +174,10 @@ services:
       # Live push needs the broker; with it off the stream answers 503 and the
       # client polls, as before.
       LIVE_PUSH_ENABLED: ${LIVE_PUSH_ENABLED:-false}
+      # Unset = the admin routes answer 404. Set from a secret store, >= 24 chars.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # The unauthenticated legacy API. Off in production unless asked for.
+      LEGACY_API_ENABLED: ${LEGACY_API_ENABLED:-false}
       KAFKA_BROKERS: redpanda:9092
       # Tracing off, as it is everywhere. The SDK is the component most likely
       # to leak memory here and there is no collector on this box to send to.
@@ -184,6 +190,27 @@ services:
     # which the heap limit does not cover.
     mem_limit: 512m
     mem_reservation: 256m
+
+  # One-shot: apply migrations, then exit. Never on boot (see the Dockerfile).
+  #   docker compose -f compose.prod.yaml --profile ops run --rm migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ['ops']
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ['node', 'apps/api/dist/db/migrate.js']
+    healthcheck:
+      disable: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DAFTAR_DB_NAME:-daftar}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:?WEBHOOK_SIGNING_SECRET is required}
+      CHAOS_TOKEN_SECRET: ${CHAOS_TOKEN_SECRET:?CHAOS_TOKEN_SECRET is required}
+      GUEST_SESSION_SECRET: ${GUEST_SESSION_SECRET:?GUEST_SESSION_SECRET is required}
+    restart: 'no'
 
   # The worker process: outbox relay, event-log consumers, BullMQ workers.
   # Same image as the API, different entrypoint. Every component is opt-in.
@@ -206,7 +233,7 @@ services:
       disable: true
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/daftar
+      DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DAFTAR_DB_NAME:-daftar}
       WORKERS_DB_POOL_MAX: '8'
       LOG_LEVEL: info
       KAFKA_BROKERS: redpanda:9092

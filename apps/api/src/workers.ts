@@ -59,6 +59,32 @@ const producer = needsProducer
     })
   : null;
 
+/*
+ * Topics are created here, at boot, as well as by `npm run kafka:topics`: a
+ * deploy then cannot forget the step, and the broker never auto-creates
+ * (auto_create_topics_enabled is off). Idempotent, retried in the background
+ * until the broker answers — the relay and consumers wait out the same outage.
+ */
+if (producer) {
+  const { createAdmin } = await import('./events/kafka.ts');
+  const { ensureTopics } = await import('./events/topics.ts');
+  void (async () => {
+    for (let attempt = 0; ; attempt += 1) {
+      const admin = createAdmin({ ...kafka, clientId: `${kafka.clientId}-topics` });
+      try {
+        const created = await ensureTopics(admin, topics);
+        if (created.length > 0) logger.info({ created }, 'topics created');
+        return;
+      } catch (err) {
+        logger.warn({ err, attempt }, 'topic bootstrap failed; retrying');
+      } finally {
+        await admin.close().catch(() => undefined);
+      }
+      await new Promise((r) => setTimeout(r, Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5))));
+    }
+  })();
+}
+
 const queues =
   env.JOBS_ENABLED || env.CONSUMERS_ENABLED
     ? (await import('./jobs/queues.ts')).createQueues(redis)

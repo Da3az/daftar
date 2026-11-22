@@ -115,6 +115,16 @@ const schema = z.object({
   ALLOW_FLAG_HEADERS: boolish.optional(),
 
   /**
+   * Mount the legacy API — accounts, the house-order route, reports and the
+   * chaos burst endpoints. It is **unauthenticated** by design (README) and
+   * exists for the benchmarks and the test suite. Defaults to on outside
+   * production and **off in production**, so a public deployment of the
+   * exchange does not expose it by forgetting a flag. The webhook route is not
+   * part of this: the exchange's deposits go through it.
+   */
+  LEGACY_API_ENABLED: boolish.optional(),
+
+  /**
    * Shared secret for inbound webhook signatures.
    *
    * No default outside development: a hardcoded fallback secret is the same
@@ -344,7 +354,8 @@ const schema = z.object({
    * Bearer token for `/v1/admin/*`. Unset means the admin routes answer 404:
    * there is no fallback value, because a known admin token is no gate.
    */
-  ADMIN_TOKEN: z.string().min(24).optional(),
+  // An empty value (compose's `${ADMIN_TOKEN:-}`) means unset, not "too short".
+  ADMIN_TOKEN: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(24).optional()),
 
   OTEL_ENABLED: boolish.default(false),
 
@@ -385,9 +396,14 @@ type RawEnv = z.infer<typeof schema>;
  */
 export type Env = Omit<
   RawEnv,
-  'ALLOW_FLAG_HEADERS' | 'WEBHOOK_SIGNING_SECRET' | 'CHAOS_TOKEN_SECRET' | 'GUEST_SESSION_SECRET'
+  | 'ALLOW_FLAG_HEADERS'
+  | 'LEGACY_API_ENABLED'
+  | 'WEBHOOK_SIGNING_SECRET'
+  | 'CHAOS_TOKEN_SECRET'
+  | 'GUEST_SESSION_SECRET'
 > & {
   ALLOW_FLAG_HEADERS: boolean;
+  LEGACY_API_ENABLED: boolean;
   WEBHOOK_SIGNING_SECRET: string;
   CHAOS_TOKEN_SECRET: string;
   GUEST_SESSION_SECRET: string;
@@ -440,6 +456,7 @@ function load(source: NodeJS.ProcessEnv): Env {
   return {
     ...env,
     ALLOW_FLAG_HEADERS: env.ALLOW_FLAG_HEADERS ?? env.NODE_ENV !== 'production',
+    LEGACY_API_ENABLED: env.LEGACY_API_ENABLED ?? env.NODE_ENV !== 'production',
     WEBHOOK_SIGNING_SECRET:
       env.WEBHOOK_SIGNING_SECRET ?? 'whsec_development_only_not_a_real_secret',
     CHAOS_TOKEN_SECRET: env.CHAOS_TOKEN_SECRET ?? 'chaos_development_only_not_a_real_secret',
