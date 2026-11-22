@@ -97,6 +97,23 @@ export const toEnvelopeMessage = (topic: string, event: OutboxEvent) => ({
   headers: { 'event-type': event.eventType },
 });
 
+/**
+ * After an outage: every row a failed send handed back is eligible **now**.
+ *
+ * Without this, rows released late in an outage carried a backoff of up to
+ * 30 s into the recovery and drained only when it expired — measured on the
+ * first outage run as 102 rows waiting ~11 s after the broker was back
+ * (docs/evidence/11-event-log.md). The broker answering is the signal those
+ * backoffs were waiting for.
+ */
+export async function wakeReleased(pool: pg.Pool): Promise<number> {
+  const { rowCount } = await pool.query(
+    `UPDATE outbox SET available_at = now()
+      WHERE state = 'pending' AND available_at > now() AND last_error LIKE 'broker: %'`,
+  );
+  return rowCount ?? 0;
+}
+
 export interface RelayResult extends DrainResult {
   /** Rows returned to pending because the broker could not be reached. */
   released: number;

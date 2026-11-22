@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type pg from 'pg';
 import type { StringProducer } from '../events/kafka.ts';
-import { relayOnce } from './relay.ts';
+import { relayOnce, wakeReleased } from './relay.ts';
 import { allShards, drainOnce, reap, reclaimStale, type Publisher } from './worker.ts';
 
 /**
@@ -107,9 +107,16 @@ export function startOutboxWorker(pool: pg.Pool, options: OutboxRunnerOptions): 
           },
           outageStreak,
         );
-        if (outageStreak > 0)
-          log.info({ outage_cycles: outageStreak }, 'relay: broker reachable again');
-        outageStreak = 0;
+        // Recovery is only proven by a send the broker acknowledged. A cycle
+        // that claimed nothing (everything still in backoff) proved nothing.
+        if (result.claimed === 0) return 0;
+        if (outageStreak > 0) {
+          const woken = await wakeReleased(pool);
+          log.info({ outage_cycles: outageStreak, woken }, 'relay: broker reachable again');
+          outageStreak = 0;
+          // Poll again at once: the woken backlog is waiting.
+          if (woken > 0) return batchSize;
+        }
         return result.claimed;
       } catch (err) {
         outageStreak += 1;
