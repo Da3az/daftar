@@ -26,6 +26,22 @@ import type pg from 'pg';
  */
 export async function resetLedger(pool: pg.Pool): Promise<void> {
   // Children before parents.
+  //
+  // `withdrawal_transitions` has DELETE revoked from PUBLIC; the test role owns
+  // the table, and an owner is not bound by a REVOKE (see 0002's note).
+  await pool.query('DELETE FROM recurring_runs');
+  await pool.query('DELETE FROM recurring_plans');
+  await pool.query('DELETE FROM notifications');
+  await pool.query('DELETE FROM withdrawal_transitions');
+  await pool.query('DELETE FROM withdrawals');
+  await pool.query('DELETE FROM sim_rail_payments');
+  await pool.query('DELETE FROM consumer_receipts');
+  await pool.query('DELETE FROM consumer_dead_letters');
+  await pool.query('DELETE FROM proj_positions');
+  await pool.query('DELETE FROM equity_snapshots');
+  await pool.query('DELETE FROM reconcile_dirty');
+  await pool.query('DELETE FROM projection_drift_injections');
+  await pool.query('DELETE FROM reconciliation_findings');
   await pool.query('DELETE FROM exchange_activity');
   await pool.query('DELETE FROM cash_movements');
   await pool.query('DELETE FROM deposits');

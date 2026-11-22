@@ -104,7 +104,7 @@ export interface RelayResult extends DrainResult {
 
 /** One relay cycle. */
 export async function relayOnce(options: RelayOptions, outageStreak = 0): Promise<RelayResult> {
-  const events = await claimBatch({ ...options, publish: async () => undefined });
+  const events = await claimBatch({ ...options, publish: () => Promise.resolve() });
   const result: RelayResult = {
     claimed: events.length,
     published: 0,

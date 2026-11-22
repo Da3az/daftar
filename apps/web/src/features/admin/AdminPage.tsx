@@ -27,8 +27,10 @@ interface Finding {
 }
 
 class AdminHttpError extends Error {
-  constructor(readonly status: number) {
+  readonly status: number;
+  constructor(status: number) {
     super(`admin API answered ${status}`);
+    this.status = status;
   }
 }
 
