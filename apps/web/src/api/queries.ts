@@ -28,6 +28,7 @@ export const keys = {
   position: ['position'] as const,
   withdrawals: ['withdrawals'] as const,
   notifications: ['notifications'] as const,
+  recurring: ['recurring'] as const,
   equity: (range: EquityRange) => ['equity', range] as const,
 };
 
@@ -135,14 +136,27 @@ export function useWithdrawals() {
   });
 }
 
-/** The bell. Pushed while live; polled every 15 s otherwise. */
+/** The bell. Pushed while live (and still checked once a minute, for notifications
+    written without a push — a skipped recurring buy); polled every 15 s otherwise. */
 export function useNotifications() {
   const api = useApi();
   const enabled = useHasSession();
   return useQuery({
     queryKey: keys.notifications,
     queryFn: () => api.getNotifications(30),
-    refetchInterval: () => (isLive() ? false : 15_000),
+    refetchInterval: () => (isLive() ? 60_000 : 15_000),
+    enabled,
+    ...common,
+  });
+}
+
+export function useRecurring() {
+  const api = useApi();
+  const enabled = useHasSession();
+  return useQuery({
+    queryKey: keys.recurring,
+    queryFn: () => api.listRecurring(),
+    refetchInterval: 15_000,
     enabled,
     ...common,
   });

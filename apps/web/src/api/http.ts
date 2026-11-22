@@ -20,6 +20,8 @@ import type {
   Recipient,
   Withdrawal,
   NotificationsResponse,
+  Cadence,
+  RecurringPlan,
 } from './types';
 
 const BASE = '/v1/exchange';
@@ -234,5 +236,31 @@ export class HttpApiClient implements ApiClient {
     return (await this.#send('POST', '/notifications/read', { body: { upTo } })).body as {
       marked: number;
     };
+  }
+
+  async listRecurring(): Promise<{ plans: RecurringPlan[] }> {
+    return (await this.#send('GET', '/recurring')).body as { plans: RecurringPlan[] };
+  }
+
+  async createRecurring(request: {
+    amount: CashAmount;
+    cadence: Cadence;
+  }): Promise<{ plan: RecurringPlan }> {
+    return (await this.#send('POST', '/recurring', { body: request })).body as {
+      plan: RecurringPlan;
+    };
+  }
+
+  async setRecurringActive(id: string, active: boolean): Promise<{ plan: RecurringPlan }> {
+    return (
+      await this.#send(
+        'POST',
+        `/recurring/${encodeURIComponent(id)}/${active ? 'resume' : 'pause'}`,
+      )
+    ).body as { plan: RecurringPlan };
+  }
+
+  async deleteRecurring(id: string): Promise<void> {
+    await this.#send('DELETE', `/recurring/${encodeURIComponent(id)}`);
   }
 }

@@ -20,7 +20,7 @@ import { SetAsideList } from '../trade/YourMoney';
 
 type Mode = 'deposit' | 'withdraw' | 'send';
 
-function AmountField({
+export function AmountField({
   id,
   value,
   onChange,
@@ -62,7 +62,7 @@ function AmountField({
   );
 }
 
-function checkAmount(
+export function checkAmount(
   text: string,
   max: bigint,
   maxLabel: string,

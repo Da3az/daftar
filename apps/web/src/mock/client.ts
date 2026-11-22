@@ -20,6 +20,8 @@ import type {
   Recipient,
   Withdrawal,
   NotificationsResponse,
+  Cadence,
+  RecurringPlan,
 } from '@/api/types';
 import { formatCash, parseCash } from '@/lib/money';
 import { EquityRecorder, positionFromFills } from './projections';
@@ -861,6 +863,72 @@ export class MockApiClient implements ApiClient {
   markNotificationsRead(): Promise<{ marked: number }> {
     return this.#sessionRead(
       () => ({ marked: 0 }),
+      () => undefined,
+    );
+  }
+
+  // ---------------------------------------------------------------- recurring buys
+  // The mock keeps plans but never fires them: there is no scheduler in the
+  // browser. It is enough to stage the screens.
+  readonly #plans: RecurringPlan[] = [];
+
+  listRecurring(): Promise<{ plans: RecurringPlan[] }> {
+    return this.#sessionRead(
+      () => ({ plans: [...this.#plans] }),
+      () => undefined,
+    );
+  }
+
+  createRecurring(request: {
+    amount: CashAmount;
+    cadence: Cadence;
+  }): Promise<{ plan: RecurringPlan }> {
+    return this.#sessionRead(
+      (engine) => {
+        const every = { '1m': 60_000, '1h': 3_600_000, '1d': 86_400_000, '1w': 604_800_000 }[
+          request.cadence
+        ];
+        const now = engine.now();
+        const plan: RecurringPlan = {
+          id: `rp-${crypto.randomUUID()}`,
+          symbol: 'DFT',
+          amount: request.amount,
+          cadence: request.cadence,
+          everyMs: every,
+          status: 'active',
+          nextRunAt: new Date(Math.floor(now / every) * every + every).toISOString(),
+          bought: '0.00000000',
+          spent: '0.00',
+          averagePrice: null,
+          runs: [],
+          createdAt: new Date(now).toISOString(),
+        };
+        this.#plans.unshift(plan);
+        return { plan };
+      },
+      () => check(cashIssue(request.amount, 'amount')),
+    );
+  }
+
+  setRecurringActive(id: string, active: boolean): Promise<{ plan: RecurringPlan }> {
+    return this.#sessionRead(
+      () => {
+        const plan = this.#plans.find((p) => p.id === id);
+        if (!plan) throw apiError(404, { error: 'unknown_plan', message: 'no such recurring buy' });
+        plan.status = active ? 'active' : 'paused';
+        plan.nextRunAt = active ? plan.nextRunAt : null;
+        return { plan: { ...plan } };
+      },
+      () => undefined,
+    );
+  }
+
+  deleteRecurring(id: string): Promise<void> {
+    return this.#sessionRead(
+      () => {
+        const i = this.#plans.findIndex((p) => p.id === id);
+        if (i >= 0) this.#plans.splice(i, 1);
+      },
       () => undefined,
     );
   }

@@ -155,6 +155,9 @@ if (env.JOBS_ENABLED && queues) {
     await import('./jobs/maintenance.ts');
   await declareMaintenanceSchedules(queues, { equityEveryMs: env.EQUITY_SNAPSHOT_EVERY_MS });
   workers.push(startMaintenanceWorker(pool, queues, redis, logger));
+  const { startDcaWorker, syncSchedules } = await import('./jobs/dca.ts');
+  await syncSchedules(pool, queues.dca, logger);
+  workers.push(startDcaWorker(pool, redis, logger));
   const { startRailWorker } = await import('./jobs/rail.ts');
   workers.push(
     startRailWorker(

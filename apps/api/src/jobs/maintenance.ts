@@ -4,6 +4,7 @@ import type pg from 'pg';
 import { jobOutcomes } from '../observability/metrics.ts';
 import { takeEquitySnapshots } from './equity.ts';
 import { sweepWithdrawals } from './rail.ts';
+import { syncSchedules } from './dca.ts';
 import { createRedis, type Queues, type RedisConfig } from './queues.ts';
 
 /**
@@ -16,6 +17,7 @@ import { createRedis, type Queues, type RedisConfig } from './queues.ts';
 
 export const EQUITY_SCHEDULER_ID = 'equity-snapshot';
 export const WITHDRAWAL_SWEEP_ID = 'withdrawal-sweep';
+export const DCA_SYNC_ID = 'dca-sync';
 
 /**
  * The time a scheduler job was **meant** to run. BullMQ's scheduler jobs carry
@@ -41,6 +43,11 @@ export async function declareMaintenanceSchedules(
     { every: 60_000 },
     { name: 'withdrawals.sweep', data: {} },
   );
+  await queues.maintenance.upsertJobScheduler(
+    DCA_SYNC_ID,
+    { every: 30_000 },
+    { name: 'dca.sync', data: {} },
+  );
 }
 
 export function startMaintenanceWorker(
@@ -57,6 +64,11 @@ export function startMaintenanceWorker(
         const written = await takeEquitySnapshots(pool, bucket);
         jobOutcomes.inc({ queue: 'maintenance', outcome: written > 0 ? 'completed' : 'noop' });
         return { written };
+      }
+      if (job.name === 'dca.sync') {
+        await syncSchedules(pool, queues.dca, log);
+        jobOutcomes.inc({ queue: 'maintenance', outcome: 'completed' });
+        return {};
       }
       if (job.name === 'withdrawals.sweep') {
         const redriven = await sweepWithdrawals(pool, queues, log);

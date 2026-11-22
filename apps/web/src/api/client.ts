@@ -19,6 +19,8 @@ import type {
   Recipient,
   Withdrawal,
   NotificationsResponse,
+  Cadence,
+  RecurringPlan,
 } from './types';
 
 /** Every non-2xx answer. `status` decides rate limiting (429); `code` decides everything else. */
@@ -110,4 +112,15 @@ export interface ApiClient {
   getNotifications(limit?: number): Promise<NotificationsResponse>;
   /** POST /v1/exchange/notifications/read — marks everything up to `upTo` read. */
   markNotificationsRead(upTo: string): Promise<{ marked: number }>;
+  /** GET /v1/exchange/recurring */
+  listRecurring(): Promise<{ plans: RecurringPlan[] }>;
+  /** POST /v1/exchange/recurring. Errors: 422 too_many_plans · 422 amount_too_large. */
+  createRecurring(request: {
+    amount: CashAmount;
+    cadence: Cadence;
+  }): Promise<{ plan: RecurringPlan }>;
+  /** POST /v1/exchange/recurring/{id}/pause | resume. */
+  setRecurringActive(id: string, active: boolean): Promise<{ plan: RecurringPlan }>;
+  /** DELETE /v1/exchange/recurring/{id} — run history is kept. */
+  deleteRecurring(id: string): Promise<void>;
 }

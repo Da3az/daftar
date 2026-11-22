@@ -33,6 +33,7 @@ import { portfolioRoutes } from './routes/exchange-portfolio.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { withdrawalRoutes } from './routes/exchange-withdrawals.ts';
 import { streamRoutes } from './routes/exchange-stream.ts';
+import { recurringRoutes } from './routes/exchange-recurring.ts';
 import type { LiveHub } from './events/hub.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
@@ -304,6 +305,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   await app.register(portfolioRoutes);
   await app.register(withdrawalRoutes);
   await app.register(streamRoutes);
+  await app.register(recurringRoutes);
   await app.register(adminRoutes);
 
   return app;

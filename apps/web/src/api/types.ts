@@ -296,6 +296,36 @@ export interface Withdrawal {
   history: WithdrawalTransition[];
 }
 
+// ----------------------------------------------------------------- recurring buys
+export type Cadence = '1m' | '1h' | '1d' | '1w';
+
+export interface RecurringRun {
+  scheduledFor: Timestamp;
+  status: 'filled' | 'partial' | 'skipped';
+  quantity: Quantity | null;
+  notional: CashAmount | null;
+  /** Why a run was skipped (or only partly filled). */
+  reason: string | null;
+}
+
+export interface RecurringPlan {
+  id: string;
+  symbol: string;
+  /** Cash spent per run, at most. */
+  amount: CashAmount;
+  cadence: Cadence | null;
+  everyMs: number;
+  status: 'active' | 'paused';
+  nextRunAt: Timestamp | null;
+  bought: Quantity;
+  spent: CashAmount;
+  /** spent / bought, per whole coin. null before the first fill. */
+  averagePrice: CashAmount | null;
+  /** Newest first, up to 20. */
+  runs: RecurringRun[];
+  createdAt: Timestamp;
+}
+
 // ----------------------------------------------------------------- notifications
 export interface AppNotification {
   id: string;

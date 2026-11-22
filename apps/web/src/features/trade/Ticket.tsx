@@ -9,6 +9,7 @@ import { Panel } from '@/components/Panel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Segmented } from '@/components/ui/segmented';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RecurringPanel } from './Recurring';
 import { cn } from '@/lib/cn';
 import { newClientId } from '@/lib/ids';
 import {
@@ -211,6 +212,7 @@ export function Ticket({
   const { values, set, setSide, setType, priceTaken, focusRef } = useTicket();
   const ids = { price: useId(), quantity: useId() };
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [mode, setMode] = useState<'order' | 'recurring'>('order');
   const rules = rulesOf(snapshot?.market);
   const checked = check(values, rules);
   const { side, type } = values;
@@ -326,223 +328,249 @@ export function Ticket({
 
   return (
     <Panel title="Place an order" className={className} id="ticket" plain={plain}>
-      <form id="ticket-form" onSubmit={submit} className="flex flex-col gap-4 px-7 pb-6" noValidate>
-        <Segmented
-          size="lg"
-          label="Buy or sell"
-          value={side}
-          onChange={setSide}
-          options={[
-            {
-              value: 'buy',
-              label: 'Buy',
-              selectedClass: 'data-[state=on]:bg-buy data-[state=on]:text-on-buy',
-            },
-            {
-              value: 'sell',
-              label: 'Sell',
-              selectedClass: 'data-[state=on]:bg-sell data-[state=on]:text-on-sell',
-            },
-          ]}
-        />
-        <Tabs value={type} onValueChange={(next) => setType(next as 'limit' | 'market')}>
-          <TabsList aria-label="Order type">
-            <TabsTrigger value="limit">Limit — name your price</TabsTrigger>
-            <TabsTrigger value="market">Market — take the best</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <Field
-          id={ids.price}
-          label="Price per coin"
-          unit={QUOTE}
-          value={type === 'market' ? '' : values.price}
-          placeholder={
-            type === 'market'
-              ? `≈ ${showCash(side === 'buy' ? bestAsk : bestBid)}, set by the book`
-              : '0.00'
-          }
-          disabled={type === 'market'}
-          onChange={(price) => set({ price })}
-          issue={
-            type === 'limit'
-              ? (checked.priceIssue ?? (refusal?.field === 'price' ? refusal.detail : null))
-              : null
-          }
-          inputRef={focusRef}
-          flashKey={priceTaken}
-          aside={
-            <>
-              Best {side === 'buy' ? 'ask' : 'bid'} is{' '}
-              <Num>{showCash(side === 'buy' ? bestAsk : bestBid)}</Num>
-            </>
-          }
-        >
-          <div className="mt-3 flex gap-3">
-            <button
-              type="button"
-              className={pill}
-              disabled={type === 'market' || !bestBid}
-              onClick={() => bestBid && set({ price: bestBid })}
-            >
-              Bid <span className="num">{showCash(bestBid)}</span>
-            </button>
-            <button
-              type="button"
-              className={pill}
-              disabled={type === 'market' || !middle()}
-              onClick={() => {
-                const m = middle();
-                if (m) set({ price: m });
-              }}
-            >
-              Mid <span className="num">{showCash(middle())}</span>
-            </button>
-            <button
-              type="button"
-              className={pill}
-              disabled={type === 'market' || !bestAsk}
-              onClick={() => bestAsk && set({ price: bestAsk })}
-            >
-              Ask <span className="num">{showCash(bestAsk)}</span>
-            </button>
-          </div>
-        </Field>
-
-        <Field
-          id={ids.quantity}
-          label="How many coins"
-          unit={SYMBOL}
-          value={values.quantity}
-          placeholder="0.00"
-          onChange={(quantity) => set({ quantity })}
-          issue={checked.quantityIssue}
-          aside={
-            <>
-              in steps of <Num>{showQty(rules.lot)}</Num>
-            </>
-          }
-        >
-          <div className="mt-3 flex gap-3">
-            {[25, 50, 75, 100].map((percent) => (
-              <button
-                key={percent}
-                type="button"
-                className={cn(pill, 'num')}
-                disabled={!holdings}
-                onClick={() => fraction(percent)}
-                aria-label={`${percent}% of what you can use`}
-              >
-                {percent}%
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {est && checked.qtyUnits !== null && (
-          <Callout tone={side}>{sentence(side, type, values.price, checked.qtyUnits, est)}</Callout>
-        )}
-        {over && !refusal && (
-          <Callout tone="warning">
-            That is more than you can use (
-            {side === 'buy' ? (
-              <>
-                <Num>{showCash(holdings?.cashFree)}</Num> {QUOTE}
-              </>
-            ) : (
-              <>
-                <Num>{showQty(holdings?.coinFree)}</Num> {SYMBOL}
-              </>
-            )}
-            ). You can still send it; the server decides.
-          </Callout>
-        )}
-
-        <div className="flex items-baseline justify-between text-md text-ink-2">
-          <span>{totalLabel}</span>
-          <b className="num text-xl font-semibold text-ink">
-            {est ? showCash(est.totalCents) : '—'} <span className="text-md">{QUOTE}</span>
-          </b>
+      {me && (
+        <div className="px-7 pb-4">
+          <Tabs value={mode} onValueChange={(next) => setMode(next as 'order' | 'recurring')}>
+            <TabsList aria-label="One order or a recurring buy">
+              <TabsTrigger value="order">One order</TabsTrigger>
+              <TabsTrigger value="recurring">Recurring</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-
-        {me === null ? (
-          <>
-            <Button type="submit" size="lg" variant="brand" disabled={enter.isPending}>
-              <span>{enter.isPending ? 'Creating your account…' : 'Enter as guest to trade'}</span>
-            </Button>
-            {guestRefusal ? (
-              <Callout tone={guestRefusal.tone} title={guestRefusal.title} role="alert">
-                {guestRefusal.detail}
-              </Callout>
-            ) : (
-              <p className="text-sm text-ink-2">
-                One click hands you <Num className="font-semibold">10,000.00</Num> of play money. No
-                sign-up. Your session is a cookie on this browser — clear it and the account is gone
-                for good.
-              </p>
-            )}
-          </>
-        ) : (
-          <Button
-            type="submit"
+      )}
+      {mode === 'recurring' && me ? (
+        <RecurringPanel />
+      ) : (
+        <form
+          id="ticket-form"
+          onSubmit={submit}
+          className="flex flex-col gap-4 px-7 pb-6"
+          noValidate
+        >
+          <Segmented
             size="lg"
-            variant={side}
-            disabled={!me || !ready || place.isPending}
-            aria-busy={place.isPending}
+            label="Buy or sell"
+            value={side}
+            onChange={setSide}
+            options={[
+              {
+                value: 'buy',
+                label: 'Buy',
+                selectedClass: 'data-[state=on]:bg-buy data-[state=on]:text-on-buy',
+              },
+              {
+                value: 'sell',
+                label: 'Sell',
+                selectedClass: 'data-[state=on]:bg-sell data-[state=on]:text-on-sell',
+              },
+            ]}
+          />
+          <Tabs value={type} onValueChange={(next) => setType(next as 'limit' | 'market')}>
+            <TabsList aria-label="Order type">
+              <TabsTrigger value="limit">Limit — name your price</TabsTrigger>
+              <TabsTrigger value="market">Market — take the best</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <Field
+            id={ids.price}
+            label="Price per coin"
+            unit={QUOTE}
+            value={type === 'market' ? '' : values.price}
+            placeholder={
+              type === 'market'
+                ? `≈ ${showCash(side === 'buy' ? bestAsk : bestBid)}, set by the book`
+                : '0.00'
+            }
+            disabled={type === 'market'}
+            onChange={(price) => set({ price })}
+            issue={
+              type === 'limit'
+                ? (checked.priceIssue ?? (refusal?.field === 'price' ? refusal.detail : null))
+                : null
+            }
+            inputRef={focusRef}
+            flashKey={priceTaken}
+            aside={
+              <>
+                Best {side === 'buy' ? 'ask' : 'bid'} is{' '}
+                <Num>{showCash(side === 'buy' ? bestAsk : bestBid)}</Num>
+              </>
+            }
           >
+            <div className="mt-3 flex gap-3">
+              <button
+                type="button"
+                className={pill}
+                disabled={type === 'market' || !bestBid}
+                onClick={() => bestBid && set({ price: bestBid })}
+              >
+                Bid <span className="num">{showCash(bestBid)}</span>
+              </button>
+              <button
+                type="button"
+                className={pill}
+                disabled={type === 'market' || !middle()}
+                onClick={() => {
+                  const m = middle();
+                  if (m) set({ price: m });
+                }}
+              >
+                Mid <span className="num">{showCash(middle())}</span>
+              </button>
+              <button
+                type="button"
+                className={pill}
+                disabled={type === 'market' || !bestAsk}
+                onClick={() => bestAsk && set({ price: bestAsk })}
+              >
+                Ask <span className="num">{showCash(bestAsk)}</span>
+              </button>
+            </div>
+          </Field>
+
+          <Field
+            id={ids.quantity}
+            label="How many coins"
+            unit={SYMBOL}
+            value={values.quantity}
+            placeholder="0.00"
+            onChange={(quantity) => set({ quantity })}
+            issue={checked.quantityIssue}
+            aside={
+              <>
+                in steps of <Num>{showQty(rules.lot)}</Num>
+              </>
+            }
+          >
+            <div className="mt-3 flex gap-3">
+              {[25, 50, 75, 100].map((percent) => (
+                <button
+                  key={percent}
+                  type="button"
+                  className={cn(pill, 'num')}
+                  disabled={!holdings}
+                  onClick={() => fraction(percent)}
+                  aria-label={`${percent}% of what you can use`}
+                >
+                  {percent}%
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {est && checked.qtyUnits !== null && (
+            <Callout tone={side}>
+              {sentence(side, type, values.price, checked.qtyUnits, est)}
+            </Callout>
+          )}
+          {over && !refusal && (
+            <Callout tone="warning">
+              That is more than you can use (
+              {side === 'buy' ? (
+                <>
+                  <Num>{showCash(holdings?.cashFree)}</Num> {QUOTE}
+                </>
+              ) : (
+                <>
+                  <Num>{showQty(holdings?.coinFree)}</Num> {SYMBOL}
+                </>
+              )}
+              ). You can still send it; the server decides.
+            </Callout>
+          )}
+
+          <div className="flex items-baseline justify-between text-md text-ink-2">
+            <span>{totalLabel}</span>
+            <b className="num text-xl font-semibold text-ink">
+              {est ? showCash(est.totalCents) : '—'} <span className="text-md">{QUOTE}</span>
+            </b>
+          </div>
+
+          {me === null ? (
+            <>
+              <Button type="submit" size="lg" variant="brand" disabled={enter.isPending}>
+                <span>
+                  {enter.isPending ? 'Creating your account…' : 'Enter as guest to trade'}
+                </span>
+              </Button>
+              {guestRefusal ? (
+                <Callout tone={guestRefusal.tone} title={guestRefusal.title} role="alert">
+                  {guestRefusal.detail}
+                </Callout>
+              ) : (
+                <p className="text-sm text-ink-2">
+                  One click hands you <Num className="font-semibold">10,000.00</Num> of play money.
+                  No sign-up. Your session is a cookie on this browser — clear it and the account is
+                  gone for good.
+                </p>
+              )}
+            </>
+          ) : (
+            <Button
+              type="submit"
+              size="lg"
+              variant={side}
+              disabled={!me || !ready || place.isPending}
+              aria-busy={place.isPending}
+            >
+              <span>
+                {place.isPending
+                  ? 'Sending — counted once'
+                  : `${sideName}${checked.qtyUnits ? ` ${showQty(checked.qtyUnits)}` : ''} ${SYMBOL}`}
+              </span>
+              <Kbd>Ctrl ↵</Kbd>
+            </Button>
+          )}
+
+          {refusal && refusal.field !== 'price' && (
+            <Callout tone={refusal.tone} title={refusal.title} role="alert">
+              {refusal.detail}
+            </Callout>
+          )}
+          {outcome?.kind === 'done' && (
+            <Callout tone={outcome.tone} title={outcome.title} role="status">
+              {outcome.detail}{' '}
+              <LinkButton tone="ink" onClick={() => setOutcome(null)}>
+                Dismiss
+              </LinkButton>
+            </Callout>
+          )}
+
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm text-ink-2">
             <span>
-              {place.isPending
-                ? 'Sending — counted once'
-                : `${sideName}${checked.qtyUnits ? ` ${showQty(checked.qtyUnits)}` : ''} ${SYMBOL}`}
+              You can use{' '}
+              <Num className="text-ink">{holdings ? showCash(holdings.cashFree) : '—'}</Num> {QUOTE}{' '}
+              · <Num className="text-ink">{holdings ? showQty(holdings.coinFree) : '—'}</Num>{' '}
+              {SYMBOL}
             </span>
-            <Kbd>Ctrl ↵</Kbd>
-          </Button>
-        )}
-
-        {refusal && refusal.field !== 'price' && (
-          <Callout tone={refusal.tone} title={refusal.title} role="alert">
-            {refusal.detail}
-          </Callout>
-        )}
-        {outcome?.kind === 'done' && (
-          <Callout tone={outcome.tone} title={outcome.title} role="status">
-            {outcome.detail}{' '}
-            <LinkButton tone="ink" onClick={() => setOutcome(null)}>
-              Dismiss
-            </LinkButton>
-          </Callout>
-        )}
-
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm text-ink-2">
-          <span>
-            You can use{' '}
-            <Num className="text-ink">{holdings ? showCash(holdings.cashFree) : '—'}</Num> {QUOTE} ·{' '}
-            <Num className="text-ink">{holdings ? showQty(holdings.coinFree) : '—'}</Num> {SYMBOL}
-          </span>
-          {me &&
-            holdings &&
-            (side === 'buy' ? holdings.cashAside > 0n : holdings.coinAside > 0n) && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <LinkButton>
-                    <Num>
-                      {side === 'buy' ? showCash(holdings.cashAside) : showQty(holdings.coinAside)}
-                    </Num>{' '}
-                    more is set aside
-                  </LinkButton>
-                </PopoverTrigger>
-                <PopoverContent align="end">
-                  <SetAsideList me={me} unit={side === 'buy' ? 'USD' : 'DFT'} />
-                </PopoverContent>
-              </Popover>
-            )}
-        </div>
-        <p className="text-xs text-ink-3">
-          Prices in steps of {showCash(rules.tick)}, from {showCash(rules.min)} to{' '}
-          {showCash(rules.max)}. Up to 100,000 coins an order, 50 open orders. The server checks
-          every order again and its answer wins.
-        </p>
-      </form>
+            {me &&
+              holdings &&
+              (side === 'buy' ? holdings.cashAside > 0n : holdings.coinAside > 0n) && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <LinkButton>
+                      <Num>
+                        {side === 'buy'
+                          ? showCash(holdings.cashAside)
+                          : showQty(holdings.coinAside)}
+                      </Num>{' '}
+                      more is set aside
+                    </LinkButton>
+                  </PopoverTrigger>
+                  <PopoverContent align="end">
+                    <SetAsideList me={me} unit={side === 'buy' ? 'USD' : 'DFT'} />
+                  </PopoverContent>
+                </Popover>
+              )}
+          </div>
+          <p className="text-xs text-ink-3">
+            Prices in steps of {showCash(rules.tick)}, from {showCash(rules.min)} to{' '}
+            {showCash(rules.max)}. Up to 100,000 coins an order, 50 open orders. The server checks
+            every order again and its answer wins.
+          </p>
+        </form>
+      )}
     </Panel>
   );
 }
