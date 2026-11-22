@@ -296,6 +296,23 @@ export interface Withdrawal {
   history: WithdrawalTransition[];
 }
 
+// ----------------------------------------------------------------- notifications
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  occurredAt: Timestamp;
+  createdAt: Timestamp;
+  read: boolean;
+}
+
+export interface NotificationsResponse {
+  unread: number;
+  /** Newest first. */
+  notifications: AppNotification[];
+}
+
 // ----------------------------------------------------------------- projections
 /** GET /v1/exchange/position — from the positions projection, so it can lag the ledger. */
 export interface Position {

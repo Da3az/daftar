@@ -32,12 +32,16 @@ import { exchangeRoutes } from './routes/exchange.ts';
 import { portfolioRoutes } from './routes/exchange-portfolio.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { withdrawalRoutes } from './routes/exchange-withdrawals.ts';
+import { streamRoutes } from './routes/exchange-stream.ts';
+import type { LiveHub } from './events/hub.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
 declare module 'fastify' {
   interface FastifyInstance {
     pool: pg.Pool;
     db: Database;
+    /** The live-push hub, when this instance runs one (`LIVE_PUSH_ENABLED`). */
+    live: LiveHub | null;
   }
 }
 
@@ -61,6 +65,8 @@ const serializerCompiler = createSerializerCompiler({ replacer: bigintReplacer }
 
 export interface BuildAppOptions {
   pool: pg.Pool;
+  /** Started by `server.ts` when live push is on; null keeps the stream route answering 503. */
+  live?: LiveHub | null;
   /**
    * Override the logger. Tests pass a silent or capturing pino instance.
    *
@@ -141,6 +147,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
 
   app.decorate('pool', options.pool);
   app.decorate('db', createDatabase(options.pool));
+  app.decorate('live', options.live ?? null);
 
   /**
    * The pool's idle-client 'error' event is handled in createPool so the process
@@ -296,6 +303,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   await app.register(exchangeRoutes);
   await app.register(portfolioRoutes);
   await app.register(withdrawalRoutes);
+  await app.register(streamRoutes);
   await app.register(adminRoutes);
 
   return app;

@@ -1,8 +1,13 @@
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useApi } from './context';
+import { isLive } from './live';
 import type { CandleInterval, EquityRange } from './types';
 
-/* Polling cadences. Live but polled: a failed refresh keeps the last good data on screen
+/* While the live stream is open these queries are pushed, not polled: each
+   refetchInterval below returns false when `isLive()`. The stream invalidates
+   them as events arrive; when it drops, polling resumes on the next render.
+
+   Polling cadences. Live but polled: a failed refresh keeps the last good data on screen
    (TanStack Query keeps `data` when a refetch errors) and the next tick simply tries again. */
 export const POLL = {
   market: 1000,
@@ -22,6 +27,7 @@ export const keys = {
   activity: ['activity'] as const,
   position: ['position'] as const,
   withdrawals: ['withdrawals'] as const,
+  notifications: ['notifications'] as const,
   equity: (range: EquityRange) => ['equity', range] as const,
 };
 
@@ -32,7 +38,7 @@ export function useMarket() {
   return useQuery({
     queryKey: keys.market,
     queryFn: () => api.getMarket({ depth: 15, tape: 40 }),
-    refetchInterval: POLL.market,
+    refetchInterval: () => (isLive() ? false : POLL.market),
     ...common,
   });
 }
@@ -53,7 +59,7 @@ export function useMe() {
   return useQuery({
     queryKey: keys.me,
     queryFn: () => api.getMe(),
-    refetchInterval: (query) => (query.state.data ? POLL.session : false),
+    refetchInterval: (query) => (query.state.data && !isLive() ? POLL.session : false),
     ...common,
   });
 }
@@ -92,7 +98,7 @@ export function useActivity() {
   return useQuery({
     queryKey: keys.activity,
     queryFn: () => api.getActivity(100),
-    refetchInterval: POLL.activity,
+    refetchInterval: () => (isLive() ? false : POLL.activity),
     enabled,
     ...common,
   });
@@ -105,7 +111,7 @@ export function usePosition() {
   return useQuery({
     queryKey: keys.position,
     queryFn: () => api.getPosition(),
-    refetchInterval: POLL.position,
+    refetchInterval: () => (isLive() ? false : POLL.position),
     enabled,
     ...common,
   });
@@ -119,7 +125,24 @@ export function useWithdrawals() {
     queryKey: keys.withdrawals,
     queryFn: () => api.listWithdrawals(20),
     refetchInterval: (query) =>
-      query.state.data?.withdrawals.some((w) => w.outcome === 'in_progress') ? 2_000 : 15_000,
+      isLive()
+        ? 30_000
+        : query.state.data?.withdrawals.some((w) => w.outcome === 'in_progress')
+          ? 2_000
+          : 15_000,
+    enabled,
+    ...common,
+  });
+}
+
+/** The bell. Pushed while live; polled every 15 s otherwise. */
+export function useNotifications() {
+  const api = useApi();
+  const enabled = useHasSession();
+  return useQuery({
+    queryKey: keys.notifications,
+    queryFn: () => api.getNotifications(30),
+    refetchInterval: () => (isLive() ? false : 15_000),
     enabled,
     ...common,
   });

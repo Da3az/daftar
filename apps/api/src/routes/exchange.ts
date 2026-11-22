@@ -35,6 +35,7 @@ import {
   transfer,
 } from '../exchange/cash.ts';
 import { GUEST_STARTING_CASH, createGuest, findParticipant } from '../exchange/participants.ts';
+import { buildMarketSnapshot } from '../exchange/snapshot.ts';
 import {
   findWithdrawalByExternalId,
   holdSplit,
@@ -43,11 +44,7 @@ import {
 import {
   CANDLE_INTERVALS,
   getBalances,
-  getBook,
   getCandles,
-  getDayStats,
-  getMarket,
-  getTape,
   listFills,
   listOrders,
   type OrderView,
@@ -640,56 +637,14 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     handler: async (request, reply) => {
       const { symbol, depth, tape: tapeLimit } = request.query;
-
-      const [market, stats, book, tape] = await timed(request, () =>
-        Promise.all([
-          getMarket(app.pool, symbol),
-          getDayStats(app.pool, symbol),
-          getBook(app.pool, symbol, depth),
-          getTape(app.pool, symbol, tapeLimit),
-        ]),
+      const snapshot = await timed(request, () =>
+        buildMarketSnapshot(app.pool, symbol, depth, tapeLimit),
       );
-
-      if (!market) {
+      if (!snapshot) {
         reply.status(404);
         return { error: 'unknown_market', message: `no market ${symbol}` };
       }
-
-      const cashOrNull = (value: bigint | null) => (value === null ? null : formatCash(value));
-      const level = (l: { price: bigint; quantity: bigint; orders: number }) => ({
-        price: formatCash(l.price),
-        quantity: formatQuantity(l.quantity),
-        orders: l.orders,
-      });
-
-      return {
-        market: {
-          symbol: market.symbol,
-          displayName: market.displayName,
-          tickSize: formatCash(market.tickSize),
-          lotSize: formatQuantity(market.lotSize),
-          minPrice: formatCash(market.minPrice),
-          maxPrice: formatCash(market.maxPrice),
-          openingPrice: formatCash(market.openingPrice),
-          lastPrice: formatCash(market.lastPrice),
-          lastTradeAt: market.lastTradeAt,
-        },
-        stats: {
-          open: cashOrNull(stats.open),
-          high: cashOrNull(stats.high),
-          low: cashOrNull(stats.low),
-          volume: formatQuantity(stats.volume),
-          trades: stats.trades,
-        },
-        book: { bids: book.bids.map(level), asks: book.asks.map(level) },
-        tape: tape.map((t) => ({
-          id: t.id.toString(),
-          price: formatCash(t.price),
-          quantity: formatQuantity(t.quantity),
-          takerSide: t.takerSide,
-          createdAt: t.createdAt,
-        })),
-      };
+      return snapshot;
     },
   });
 

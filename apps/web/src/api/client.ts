@@ -18,6 +18,7 @@ import type {
   PlaceOrderResult,
   Recipient,
   Withdrawal,
+  NotificationsResponse,
 } from './types';
 
 /** Every non-2xx answer. `status` decides rate limiting (429); `code` decides everything else. */
@@ -105,4 +106,8 @@ export interface ApiClient {
   getEquity(range: EquityRange): Promise<EquityResponse>;
   /** GET /v1/exchange/withdrawals — newest first, each with its state history. */
   listWithdrawals(limit?: number): Promise<{ withdrawals: Withdrawal[] }>;
+  /** GET /v1/exchange/notifications — newest first, with the unread count. */
+  getNotifications(limit?: number): Promise<NotificationsResponse>;
+  /** POST /v1/exchange/notifications/read — marks everything up to `upTo` read. */
+  markNotificationsRead(upTo: string): Promise<{ marked: number }>;
 }

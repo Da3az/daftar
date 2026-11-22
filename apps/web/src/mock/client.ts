@@ -19,6 +19,7 @@ import type {
   PlaceOrderResult,
   Recipient,
   Withdrawal,
+  NotificationsResponse,
 } from '@/api/types';
 import { formatCash, parseCash } from '@/lib/money';
 import { EquityRecorder, positionFromFills } from './projections';
@@ -843,6 +844,23 @@ export class MockApiClient implements ApiClient {
         const since = engine.now() - span;
         return { points: points.filter((p) => Date.parse(p.at) >= since) };
       },
+      () => undefined,
+    );
+  }
+
+  // ---------------------------------------------------------------- notifications
+  // The mock has no notifier; its bell is always empty. Live push is off in the
+  // mock, so the page polls, as it would against a server with push disabled.
+  getNotifications(): Promise<NotificationsResponse> {
+    return this.#sessionRead(
+      () => ({ unread: 0, notifications: [] }),
+      () => undefined,
+    );
+  }
+
+  markNotificationsRead(): Promise<{ marked: number }> {
+    return this.#sessionRead(
+      () => ({ marked: 0 }),
       () => undefined,
     );
   }

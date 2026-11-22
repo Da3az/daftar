@@ -19,6 +19,7 @@ import type {
   PlaceOrderResult,
   Recipient,
   Withdrawal,
+  NotificationsResponse,
 } from './types';
 
 const BASE = '/v1/exchange';
@@ -221,6 +222,17 @@ export class HttpApiClient implements ApiClient {
   async listWithdrawals(limit?: number): Promise<{ withdrawals: Withdrawal[] }> {
     return (await this.#send('GET', '/withdrawals', { query: { limit } })).body as {
       withdrawals: Withdrawal[];
+    };
+  }
+
+  async getNotifications(limit?: number): Promise<NotificationsResponse> {
+    return (await this.#send('GET', '/notifications', { query: { limit } }))
+      .body as NotificationsResponse;
+  }
+
+  async markNotificationsRead(upTo: string): Promise<{ marked: number }> {
+    return (await this.#send('POST', '/notifications/read', { body: { upTo } })).body as {
+      marked: number;
     };
   }
 }

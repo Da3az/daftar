@@ -21,7 +21,9 @@ import type { Admin } from '@platformatic/kafka';
  *
  * ## `events.dlq` — poison messages, parked for a human
  *
- * ## `market` — the tape, for live push
+ * ## `notifications` — "a notification was written", for live push
+ *
+ * ## `market` — snapshots of the book and tape, for live push
  *
  * Short retention: a client that missed a tick refetches the book over HTTP;
  * nothing replays market data.
@@ -31,12 +33,14 @@ export interface TopicNames {
   events: string;
   eventsDlq: string;
   market: string;
+  notifications: string;
 }
 
 export const topicNames = (namespace: string): TopicNames => ({
   events: `${namespace}.exchange.events.v1`,
   eventsDlq: `${namespace}.exchange.events.dlq.v1`,
   market: `${namespace}.exchange.market.v1`,
+  notifications: `${namespace}.exchange.notifications.v1`,
 });
 
 /** Consumer group names, one per independent reader of the events topic. */
@@ -74,6 +78,16 @@ export function topicSpecs(names: TopicNames): TopicSpec[] {
       partitions: 1,
       configs: [
         { name: 'retention.ms', value: '-1' },
+        { name: 'cleanup.policy', value: 'delete' },
+      ],
+    },
+    {
+      // Written after a notification row commits, read by API instances to
+      // push it. Lossy by design: a client that misses one reads the list.
+      topic: names.notifications,
+      partitions: 4,
+      configs: [
+        { name: 'retention.ms', value: String(7 * 24 * 60 * 60 * 1000) },
         { name: 'cleanup.policy', value: 'delete' },
       ],
     },

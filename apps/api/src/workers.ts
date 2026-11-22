@@ -47,7 +47,11 @@ const redis = { url: env.REDIS_URL, prefix: env.BULLMQ_PREFIX };
 type Stoppable = { name: string; stop: () => Promise<void> };
 const stages: Stoppable[][] = [[], [], [], []];
 
-const needsProducer = env.CONSUMERS_ENABLED || env.OUTBOX_PUBLISHER === 'kafka';
+const needsProducer =
+  env.CONSUMERS_ENABLED ||
+  env.OUTBOX_PUBLISHER === 'kafka' ||
+  env.MARKET_TICKER_ENABLED ||
+  env.JOBS_ENABLED;
 const producer = needsProducer
   ? (await import('./events/kafka.ts')).createProducer({
       ...kafka,
@@ -105,6 +109,20 @@ if (env.CONSUMERS_ENABLED && producer) {
       }),
     );
   }
+  if (queues) {
+    const { enqueueNotification, isNotifiable } = await import('./jobs/notify.ts');
+    consumers.push(
+      runConsumer(options, {
+        name: 'notifier',
+        groupId: groups.notifier,
+        types: isNotifiable,
+        // Not `earliest`: a first deploy must not notify every guest about
+        // their whole history.
+        startFrom: 'latest',
+        handler: { kind: 'side-effect', run: enqueueNotification(queues.notify) },
+      }),
+    );
+  }
   consumers.forEach((c, i) => stages[0]!.push({ name: `consumer-${String(i)}`, stop: c.stop }));
 
   const sweeps = startReconcileSweeps(pool, { intervalMs: env.RECONCILE_INTERVAL_MS, log: logger });
@@ -150,6 +168,29 @@ if (env.JOBS_ENABLED && queues) {
       logger,
     ),
   );
+}
+
+if (env.JOBS_ENABLED && queues && producer) {
+  const { startNotifyWorker } = await import('./jobs/notify.ts');
+  workers.push(startNotifyWorker(pool, producer, topics.notifications, redis, logger));
+}
+
+/* ---------------------------------------------------------- market ticker */
+
+if (env.MARKET_TICKER_ENABLED) {
+  if (!producer)
+    throw new Error(
+      'MARKET_TICKER_ENABLED needs the producer (set CONSUMERS_ENABLED or OUTBOX_PUBLISHER=kafka)',
+    );
+  const { startMarketTicker } = await import('./events/ticker.ts');
+  const { DEFAULT_MARKET } = await import('./exchange/engine.ts');
+  const ticker = startMarketTicker(pool, producer, {
+    topic: topics.market,
+    symbol: DEFAULT_MARKET,
+    intervalMs: env.MARKET_TICKER_INTERVAL_MS,
+    log: logger,
+  });
+  stages[1]!.push({ name: 'market-ticker', stop: ticker.stop });
 }
 
 for (const worker of workers) {

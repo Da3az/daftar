@@ -303,6 +303,16 @@ const schema = z.object({
   JOBS_ENABLED: boolish.default(false),
   MARKET_TICKER_ENABLED: boolish.default(false),
 
+  /** How often the market ticker rebuilds the snapshot (published only when it changed). */
+  MARKET_TICKER_INTERVAL_MS: z.coerce.number().int().min(100).default(500),
+
+  /**
+   * Serve `GET /v1/exchange/stream` from this API instance: a per-instance
+   * Kafka consumer fans events out to open streams. Off by default — with it
+   * off the route answers 503 and the client keeps polling.
+   */
+  LIVE_PUSH_ENABLED: boolish.default(false),
+
   /** Size of the worker process's own pool — see docs/infrastructure.md. */
   WORKERS_DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(8),
 

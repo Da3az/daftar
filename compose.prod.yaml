@@ -169,6 +169,10 @@ services:
       EXCHANGE_BOTS_ENABLED: ${EXCHANGE_BOTS_ENABLED:-false}
       # Off unless asked for, like the bots. One instance only.
       OUTBOX_WORKER_ENABLED: ${OUTBOX_WORKER_ENABLED:-false}
+      # Live push needs the broker; with it off the stream answers 503 and the
+      # client polls, as before.
+      LIVE_PUSH_ENABLED: ${LIVE_PUSH_ENABLED:-false}
+      KAFKA_BROKERS: redpanda:9092
       # Tracing off, as it is everywhere. The SDK is the component most likely
       # to leak memory here and there is no collector on this box to send to.
       OTEL_ENABLED: 'false'

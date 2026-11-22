@@ -39,7 +39,26 @@ const { buildApp } = await import('./app.ts');
 const { createPool } = await import('./db/pool.ts');
 
 const pool = createPool({ connectionString: env.DATABASE_URL, applicationName: 'daftar-api' });
-const app = await buildApp({ pool });
+
+/*
+ * The live-push hub: a Kafka consumer of its own, fanning events out to the
+ * streams open on this instance. Never on the order path — a broker outage
+ * stops the push, and the clients fall back to polling.
+ */
+const live = env.LIVE_PUSH_ENABLED
+  ? await (async () => {
+      const { startLiveHub } = await import('./events/hub.ts');
+      const { topicNames } = await import('./events/topics.ts');
+      return startLiveHub(
+        { brokers: env.KAFKA_BROKERS, clientId: `daftar-api-${String(process.pid)}` },
+        topicNames(env.KAFKA_NAMESPACE),
+        env.KAFKA_NAMESPACE,
+        logger,
+      );
+    })()
+  : null;
+
+const app = await buildApp({ pool, live });
 
 /**
  * The bots, when this deployment has asked for them. Started after the app is
@@ -96,6 +115,7 @@ async function shutdown(signal: string): Promise<void> {
     await bots?.stop();
     // Likewise: a cycle in progress holds claimed rows it should get to settle.
     await outbox?.stop();
+    await live?.stop();
     await pool.end();
     // Last, and after the pool: flushing spans needs the export to finish, and
     // the final spans are the ones describing the requests that were still

@@ -18,6 +18,8 @@ import { emit } from './actions';
 import { CommandPalette } from './CommandPalette';
 import { ReceiptSheet } from '@/features/history/Receipt';
 import { useShortcuts } from './useShortcuts';
+import { useLiveStream } from '@/api/live';
+import { LiveIndicator, NotificationBell } from './LiveBits';
 
 const NAV = [
   { to: '/', label: 'Trade' },
@@ -166,6 +168,8 @@ function Header() {
       </nav>
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
         <Freshness />
+        {me && <LiveIndicator />}
+        {me && <NotificationBell />}
         <button
           type="button"
           onClick={() => emit('daftar:palette')}
@@ -199,6 +203,7 @@ function Header() {
 
 export function Shell() {
   useShortcuts();
+  useLiveStream(Boolean(useMe().data));
   return (
     <div className="flex min-h-dvh flex-col xl:h-dvh">
       <div className="sticky top-0 z-30 flex-none xl:static">
