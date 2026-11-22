@@ -287,23 +287,94 @@ line while the mean reversion pushed the other way and lost. Bids now round down
 and offers round up. Over the next 6,900 trades the price stayed between 24.91
 and 25.33 with a 50.0% buy/sell split.
 
-**What this is not.** No fees, no margin, one market, no websocket (the screen
-polls once a second), no real payment provider (deposits come from a simulated
-one), and guest reservations are arithmetic over open orders rather than money
-moved into a hold account. The legacy API is still
-unauthenticated and still mounted; it must not be exposed on a public
-deployment of this branch as it stands.
+**What this is not.** No fees, no margin, one market, no real payment provider
+(deposits come from a simulated one and payouts go to a simulated rail), and
+the reservations of open orders are still arithmetic over those orders rather
+than money moved into a hold account — only withdrawals use a hold account.
+Live updates are pushed over server-sent events when the event log is running,
+and the screen falls back to polling when it is not; there is no WebSocket.
+The event log is **one Redpanda broker with replication factor 1**: losing its
+disk loses the log, which can be rebuilt from PostgreSQL, and nothing else.
+Delivery is at-least-once everywhere and every consumer is idempotent by a
+PostgreSQL unique key; **no exactly-once is claimed**, because Kafka's
+exactly-once ends at the broker and the effects here are in PostgreSQL. Missed
+recurring-buy runs are not made up. The legacy API is still unauthenticated
+and still mounted; it must not be exposed on a public deployment of this
+branch as it stands.
+
+### The event log and the job queue
+
+The PostgreSQL outbox is still where every event is born, in the same
+transaction as the money. The outbox worker is now a **relay**: it produces
+each claimed batch to Redpanda (keyed by account, idempotent producer) and
+marks the rows published only after the broker acknowledged them. With the
+broker down, orders keep committing and the outbox backs up; it drains in
+order when the broker returns. Matching never touches Redpanda or BullMQ.
+
+| Consumer / job      | What it does                                                                    | Idempotent by                                       |
+| ------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------- |
+| activity            | the per-guest feed                                                              | `UNIQUE (outbox_event_id)` + `consumer_receipts`    |
+| positions           | average entry, realised P&L; rebuildable with `projections:replay`              | `consumer_receipts`                                 |
+| reconciler          | compares positions and withdrawal holds with the ledger, records time-to-detect | `consumer_receipts`                                 |
+| withdrawals         | turns withdrawal events into `rail.submit` jobs                                 | job id `<eventId>-submit` + state compare-and-set   |
+| notifier → `notify` | in-app notifications                                                            | `UNIQUE (event_id, kind)`                           |
+| `dca.fire`          | one Job Scheduler per recurring buy                                             | idempotency key + `UNIQUE (plan_id, scheduled_for)` |
+
+**Withdrawals are a saga.** The request moves the cash into a per-guest hold
+account; the payout rail is called from a BullMQ job; the hold is settled to
+the outside world on confirmation or released back on failure. A database
+trigger enforces the legal state transitions and writes their history, and a
+settlement or release can exist at most once per withdrawal.
+
+### Why Redpanda and Valkey, when PostgreSQL can queue
+
+PostgreSQL already queues here — the outbox is a queue, and it stays the
+source of truth. BullMQ v6 also ships an official PostgreSQL backend, so
+"BullMQ, but on the database we already run" was a real option. It was not
+taken, for three reasons that are about this repository specifically:
+
+- **The database is the measured bottleneck's neighbour.** Every number above
+  is about contention on PostgreSQL; delayed jobs, rate limiters and stalled-job
+  checks polling the same database would add load to the one component the
+  benchmarks are about. Valkey takes that load elsewhere.
+- **Maturity.** BullMQ's own documentation calls the Redis backend the most
+  battle-tested; the PostgreSQL backend had open parity bugs at the time of
+  writing (e.g. missed events, `removeOnComplete: 0` deleting all finished jobs).
+- **Replay is a different job from queueing.** A queue deletes what it has
+  delivered. A projection that must be rebuildable from the beginning needs a
+  log that keeps everything and lets each reader keep its own position. That
+  is what Redpanda is for here; the outbox reaps its rows after a day.
+
+The cost is two more stateful services and roughly 3 GB of memory (see
+[`docs/infrastructure.md`](docs/infrastructure.md)). Neither is trusted for
+correctness: every guarantee is a PostgreSQL constraint, and PostgreSQL-side
+sweepers re-drive anything a lost job or message would have done.
+
+**Measurements for this part are not taken yet.** The evidence files for the
+broker outage, the replay, time-to-detect, the withdrawal saga and push-versus-
+poll latency will be written from real runs, on the named box, with the
+provenance header — not before.
 
 ```bash
 npm run exchange:db:create      # a separate database: never the seeded one
 npm run exchange:db:migrate
-npm run dev:exchange            # API on :3000 with the bots trading and the outbox worker running
+npm run broker:up               # Redpanda + Valkey
+npm run kafka:topics            # creates the topics; the broker never auto-creates them
+npm run dev:exchange            # API on :3000 with the bots trading and live push on
+npm run dev:workers             # relay, consumers, BullMQ workers, market ticker
 npm run dev:web                 # :5173
 ```
 
-The bots and the outbox worker are **off by default** and the exchange gets its
-own database, for one reason: they write around the clock, and the seeded
-database is the dataset every number above was measured against.
+On an exchange database that already has history, run `npm run kafka:backfill`
+once, with the workers stopped, before the first `dev:workers`: it puts every
+event already in the feed onto the log with its original id, so a replay covers
+everything. It reports guest fills from before the outbox existed, which no
+event describes and the positions projection therefore cannot include.
+
+The bots, the outbox relay and every worker are **off by default** and the
+exchange gets its own database, for one reason: they write around the clock,
+and the seeded database is the dataset every number above was measured
+against.
 
 ---
 
