@@ -980,336 +980,6 @@
         }
       }
     },
-    "/v1/webhooks/{provider}": {
-      "post": {
-        "summary": "Inbound provider event. HMAC-SHA256 over the raw body.",
-        "tags": [
-          "webhooks"
-        ],
-        "description": "**Signature.** `x-daftar-signature: t=<unix>,v1=<hex>` where the\nHMAC-SHA256 is computed over `\"{t}.{raw body}\"` with the shared secret.\nModelled on Stripe's scheme. Several `v1=` values are accepted so a\nsecret rotation needs no downtime.\n\nThe signature covers the **raw bytes**. Verifying against a\nre-serialised body cannot work: a JSON round trip changes number\nformatting, whitespace, unicode escaping, duplicate keys and\ninteger-like key order — and corrupts large integers outright.\n\n**Replay window.** +/-300s on the signed timestamp. A correctly signed\nbut stale payload is recorded as a replay, not a forgery; the two are\nreported separately because they need different responses.\n\n**Idempotency.** `UNIQUE (provider, idempotency_key)` arbitrates. A\nreplay arriving while the first delivery is still processing gets\n**409**, not 200 — answering 200 for work that has not finished is the\nbug this endpoint exists to avoid. The payload hash is stored, so the\nsame key with a different body is detected and reported rather than\nsilently accepted.\n\nGenerate signed payloads with `node scripts/sign-webhook.mjs`.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "simbank"
-              ]
-            },
-            "in": "path",
-            "name": "provider",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "eventId": {
-                      "type": "string"
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": [
-                        "processed",
-                        "failed",
-                        "ignored"
-                      ]
-                    },
-                    "duplicate": {
-                      "type": "boolean"
-                    },
-                    "deliveryCount": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "transactionId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "eventId",
-                    "state",
-                    "duplicate",
-                    "deliveryCount",
-                    "transactionId"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "eventId": {
-                      "type": "string"
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": [
-                        "processed",
-                        "failed",
-                        "ignored"
-                      ]
-                    },
-                    "duplicate": {
-                      "type": "boolean"
-                    },
-                    "deliveryCount": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "transactionId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "eventId",
-                    "state",
-                    "duplicate",
-                    "deliveryCount",
-                    "transactionId"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "error",
-                    "message"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "error",
-                    "message"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "error",
-                    "message"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "error",
-                    "message"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/webhooks/events/{id}/replay": {
-      "post": {
-        "summary": "Re-deliver a stored event through the real inbound path.",
-        "tags": [
-          "webhooks"
-        ],
-        "description": "Takes the **stored payload bytes**, signs them with the current secret\nand a fresh timestamp, and feeds them back through\n`POST /v1/webhooks/:provider` — the same handler, the same signature\nverification, the same unique index.\n\nIt is not a shortcut that marks something re-processed. A replay of a\nsettled event is **expected to come back `duplicate: true` with 200**,\nand that is the point: the Settlements page has a button that\ndemonstrates the idempotency guarantee rather than describing it.\n\nDispatched in-process via Fastify’s `inject`, so it makes no network\ncall and cannot be pointed at anything but this server.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d+$"
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "replayed": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "status": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "body": {}
-                  },
-                  "required": [
-                    "replayed",
-                    "status",
-                    "body"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "received": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "received",
-                    "error",
-                    "message"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/accounts/{externalId}/statement": {
       "get": {
         "summary": "Account statement with a running balance. The T-account view.",
@@ -2391,6 +2061,336 @@
         }
       }
     },
+    "/v1/webhooks/{provider}": {
+      "post": {
+        "summary": "Inbound provider event. HMAC-SHA256 over the raw body.",
+        "tags": [
+          "webhooks"
+        ],
+        "description": "**Signature.** `x-daftar-signature: t=<unix>,v1=<hex>` where the\nHMAC-SHA256 is computed over `\"{t}.{raw body}\"` with the shared secret.\nModelled on Stripe's scheme. Several `v1=` values are accepted so a\nsecret rotation needs no downtime.\n\nThe signature covers the **raw bytes**. Verifying against a\nre-serialised body cannot work: a JSON round trip changes number\nformatting, whitespace, unicode escaping, duplicate keys and\ninteger-like key order — and corrupts large integers outright.\n\n**Replay window.** +/-300s on the signed timestamp. A correctly signed\nbut stale payload is recorded as a replay, not a forgery; the two are\nreported separately because they need different responses.\n\n**Idempotency.** `UNIQUE (provider, idempotency_key)` arbitrates. A\nreplay arriving while the first delivery is still processing gets\n**409**, not 200 — answering 200 for work that has not finished is the\nbug this endpoint exists to avoid. The payload hash is stored, so the\nsame key with a different body is detected and reported rather than\nsilently accepted.\n\nGenerate signed payloads with `node scripts/sign-webhook.mjs`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "simbank"
+              ]
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "deliveryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "transactionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "eventId",
+                    "state",
+                    "duplicate",
+                    "deliveryCount",
+                    "transactionId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "failed",
+                        "ignored"
+                      ]
+                    },
+                    "duplicate": {
+                      "type": "boolean"
+                    },
+                    "deliveryCount": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "transactionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "eventId",
+                    "state",
+                    "duplicate",
+                    "deliveryCount",
+                    "transactionId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/events/{id}/replay": {
+      "post": {
+        "summary": "Re-deliver a stored event through the real inbound path.",
+        "tags": [
+          "webhooks"
+        ],
+        "description": "Takes the **stored payload bytes**, signs them with the current secret\nand a fresh timestamp, and feeds them back through\n`POST /v1/webhooks/:provider` — the same handler, the same signature\nverification, the same unique index.\n\nIt is not a shortcut that marks something re-processed. A replay of a\nsettled event is **expected to come back `duplicate: true` with 200**,\nand that is the point: the Settlements page has a button that\ndemonstrates the idempotency guarantee rather than describing it.\n\nDispatched in-process via Fastify’s `inject`, so it makes no network\ncall and cannot be pointed at anything but this server.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "replayed": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "body": {}
+                  },
+                  "required": [
+                    "replayed",
+                    "status",
+                    "body"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "received",
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/exchange/guest": {
       "post": {
         "summary": "Enter as a guest: create a funded account and a session cookie.",
@@ -2643,6 +2643,18 @@
                           "type": "string",
                           "pattern": "^-?\\d+(\\.\\d+)?$",
                           "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "cashOnHold": {
+                          "description": "Withdrawals not yet sent to the payout rail (held, in review, or failed and being released). Still yours, not spendable. Not included in `cash`.",
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "example": "1000.00"
+                        },
+                        "cashPending": {
+                          "description": "Withdrawals sent to the rail and awaiting its confirmation. Not included in `cash`.",
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
                           "example": "1000.00"
                         },
                         "asset": {
@@ -4567,7 +4579,7 @@
         "tags": [
           "exchange"
         ],
-        "description": "One two-leg ledger transaction: the guest is debited and\n`external:funding` credited. It does **not** take the market lock, so it\ncan overlap a fill against the same cash account; the ledger’s account\nlock and non-negative check are what keep both from spending the same\nmoney. Cash reserved by open buy orders cannot be withdrawn.",
+        "description": "Starts a withdrawal. The cash moves into the guest’s **hold account** in\nthis request — one ledger transaction, under the account lock and the\nnon-negative check, so it can no longer be spent — and the payout happens\nasynchronously: submitted to the payout rail, then confirmed (hold → outside\nworld) or failed and released (hold → back to cash). Amounts at or above the\nreview threshold wait for an operator first. Cash reserved by open buy\norders cannot be withdrawn. Track it with GET /v1/exchange/withdrawals.",
         "requestBody": {
           "required": true,
           "content": {
@@ -4610,8 +4622,19 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "completed"
-                      ]
+                        "completed",
+                        "held",
+                        "review",
+                        "submitted",
+                        "confirmed",
+                        "failed",
+                        "released"
+                      ],
+                      "description": "`completed` for a transfer. For a withdrawal, the state it is in: it is a saga now — see GET /v1/exchange/withdrawals for its progress."
+                    },
+                    "withdrawalId": {
+                      "description": "For a withdrawal: the id its tracker is keyed by.",
+                      "type": "string"
                     },
                     "amount": {
                       "type": "string",
@@ -4657,8 +4680,19 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "completed"
-                      ]
+                        "completed",
+                        "held",
+                        "review",
+                        "submitted",
+                        "confirmed",
+                        "failed",
+                        "released"
+                      ],
+                      "description": "`completed` for a transfer. For a withdrawal, the state it is in: it is a saga now — see GET /v1/exchange/withdrawals for its progress."
+                    },
+                    "withdrawalId": {
+                      "description": "For a withdrawal: the id its tracker is keyed by.",
+                      "type": "string"
                     },
                     "amount": {
                       "type": "string",
@@ -4846,6 +4880,226 @@
             }
           }
         }
+      },
+      "get": {
+        "summary": "The session's withdrawals, newest first, each with its state history.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "withdrawals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "clientId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "requested",
+                              "held",
+                              "review",
+                              "submitted",
+                              "confirmed",
+                              "failed",
+                              "released"
+                            ]
+                          },
+                          "step": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 3
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "in_progress",
+                              "paid_out",
+                              "returned"
+                            ]
+                          },
+                          "inReview": {
+                            "type": "boolean"
+                          },
+                          "submitAttempts": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "lastRailStatus": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "history": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "requested",
+                                        "held",
+                                        "review",
+                                        "submitted",
+                                        "confirmed",
+                                        "failed",
+                                        "released"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "enum": [
+                                    "requested",
+                                    "held",
+                                    "review",
+                                    "submitted",
+                                    "confirmed",
+                                    "failed",
+                                    "released"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "actor": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to",
+                                "reason",
+                                "actor",
+                                "at"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "clientId",
+                          "amount",
+                          "state",
+                          "step",
+                          "outcome",
+                          "inReview",
+                          "submitAttempts",
+                          "lastRailStatus",
+                          "createdAt",
+                          "updatedAt",
+                          "history"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "withdrawals"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/exchange/transfers": {
@@ -4903,8 +5157,19 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "completed"
-                      ]
+                        "completed",
+                        "held",
+                        "review",
+                        "submitted",
+                        "confirmed",
+                        "failed",
+                        "released"
+                      ],
+                      "description": "`completed` for a transfer. For a withdrawal, the state it is in: it is a saga now — see GET /v1/exchange/withdrawals for its progress."
+                    },
+                    "withdrawalId": {
+                      "description": "For a withdrawal: the id its tracker is keyed by.",
+                      "type": "string"
                     },
                     "amount": {
                       "type": "string",
@@ -4950,8 +5215,19 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "completed"
-                      ]
+                        "completed",
+                        "held",
+                        "review",
+                        "submitted",
+                        "confirmed",
+                        "failed",
+                        "released"
+                      ],
+                      "description": "`completed` for a transfer. For a withdrawal, the state it is in: it is a saga now — see GET /v1/exchange/withdrawals for its progress."
+                    },
+                    "withdrawalId": {
+                      "description": "For a withdrawal: the id its tracker is keyed by.",
+                      "type": "string"
                     },
                     "amount": {
                       "type": "string",
@@ -5619,6 +5895,2713 @@
           }
         }
       }
+    },
+    "/v1/exchange/position": {
+      "get": {
+        "summary": "Average entry price and profit and loss for one market, from the positions projection.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Average cost method. `realisedPnl` is fixed by sells already made; `unrealisedPnl` marks what is still held at the last trade price. Built from the event log, so it can lag the ledger: `asOf` is when it last changed and `lastEventId` the newest fill applied.",
+        "parameters": [
+          {
+            "schema": {
+              "default": "DFT",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "in": "query",
+            "name": "symbol",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "string",
+                      "pattern": "^\\d+\\.\\d{8}$",
+                      "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                    },
+                    "costBasis": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "averageEntryPrice": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastPrice": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "marketValue": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "realisedPnl": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "unrealisedPnl": {
+                      "type": "string",
+                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                      "example": "1000.00"
+                    },
+                    "buys": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "sells": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "lastEventId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asOf": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "symbol",
+                    "quantity",
+                    "costBasis",
+                    "averageEntryPrice",
+                    "lastPrice",
+                    "marketValue",
+                    "realisedPnl",
+                    "unrealisedPnl",
+                    "buys",
+                    "sells",
+                    "lastEventId",
+                    "asOf"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/equity": {
+      "get": {
+        "summary": "Equity over time: periodic snapshots of cash plus holdings at the last price.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "One point per snapshot slot (5 minutes by default). Slots missed while the snapshot worker was down are absent, not interpolated. `netContributed` is plotted alongside, so the gap between the two lines is profit or loss.",
+        "parameters": [
+          {
+            "schema": {
+              "default": "7d",
+              "type": "string",
+              "enum": [
+                "1d",
+                "7d",
+                "30d"
+              ]
+            },
+            "in": "query",
+            "name": "range",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string"
+                          },
+                          "equity": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "netContributed": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "equity",
+                          "netContributed"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "points"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/stream": {
+      "get": {
+        "summary": "Live updates for the session: activity, notifications and market snapshots (SSE).",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Server-sent events. `activity` (with `id` = the event id) and `notification` are the session's own; `market` is the same snapshot GET /v1/exchange/market returns. Reconnect with `Last-Event-ID` (EventSource does this itself) to resume without gaps; `resync` means the gap was too long and the client should refetch over HTTP. 503 when this deployment has live push off — poll instead.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            },
+            "in": "query",
+            "name": "lastEventId",
+            "required": false
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/notifications": {
+      "get": {
+        "summary": "The session's notifications, newest first, and how many are unread.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 30,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "read": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "title",
+                          "body",
+                          "occurredAt",
+                          "createdAt",
+                          "read"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "unread",
+                    "notifications"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/notifications/read": {
+      "post": {
+        "summary": "Mark notifications read, up to and including `upTo`.",
+        "tags": [
+          "exchange"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "upTo": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,19}$"
+                  }
+                },
+                "required": [
+                  "upTo"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "marked": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "marked"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/recurring": {
+      "get": {
+        "summary": "The session's recurring buys, with run history and average price paid.",
+        "tags": [
+          "exchange"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plans": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "cadence": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "1m",
+                                  "1h",
+                                  "1d",
+                                  "1w"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "everyMs": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "paused"
+                            ]
+                          },
+                          "nextRunAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "bought": {
+                            "type": "string",
+                            "pattern": "^\\d+\\.\\d{8}$",
+                            "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                          },
+                          "spent": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "averagePrice": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^-?\\d+(\\.\\d+)?$",
+                                "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                "example": "1000.00"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "runs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "scheduledFor": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "filled",
+                                    "partial",
+                                    "skipped"
+                                  ]
+                                },
+                                "quantity": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^\\d+\\.\\d{8}$",
+                                      "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "notional": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(\\.\\d+)?$",
+                                      "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                      "example": "1000.00"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "scheduledFor",
+                                "status",
+                                "quantity",
+                                "notional",
+                                "reason"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "symbol",
+                          "amount",
+                          "cadence",
+                          "everyMs",
+                          "status",
+                          "nextRunAt",
+                          "bought",
+                          "spent",
+                          "averagePrice",
+                          "runs",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "plans"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a recurring buy: spend a fixed amount of cash at a fixed cadence.",
+        "tags": [
+          "exchange"
+        ],
+        "description": "Each run is a market buy sized to spend at most `amount` at the prices on the book when it fires, placed through the normal order path with an idempotency key of plan id + scheduled time. A run that cannot be paid for is recorded as skipped and notified.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                    "description": "Cash amount as an exact decimal string with at most 2 fractional digits. Never a JSON number.",
+                    "example": "100.00"
+                  },
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "1m",
+                      "1h",
+                      "1d",
+                      "1w"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount",
+                  "cadence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "cadence": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "1m",
+                                "1h",
+                                "1d",
+                                "1w"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "everyMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "nextRunAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "bought": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "spent": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "averagePrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scheduledFor": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "filled",
+                                  "partial",
+                                  "skipped"
+                                ]
+                              },
+                              "quantity": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^\\d+\\.\\d{8}$",
+                                    "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "notional": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                                    "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                    "example": "1000.00"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "scheduledFor",
+                              "status",
+                              "quantity",
+                              "notional",
+                              "reason"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "symbol",
+                        "amount",
+                        "cadence",
+                        "everyMs",
+                        "status",
+                        "nextRunAt",
+                        "bought",
+                        "spent",
+                        "averagePrice",
+                        "runs",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "plan"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/recurring/{id}/pause": {
+      "post": {
+        "summary": "Pause a recurring buy.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^rp-[0-9a-f-]{36}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "cadence": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "1m",
+                                "1h",
+                                "1d",
+                                "1w"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "everyMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "nextRunAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "bought": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "spent": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "averagePrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scheduledFor": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "filled",
+                                  "partial",
+                                  "skipped"
+                                ]
+                              },
+                              "quantity": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^\\d+\\.\\d{8}$",
+                                    "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "notional": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                                    "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                    "example": "1000.00"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "scheduledFor",
+                              "status",
+                              "quantity",
+                              "notional",
+                              "reason"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "symbol",
+                        "amount",
+                        "cadence",
+                        "everyMs",
+                        "status",
+                        "nextRunAt",
+                        "bought",
+                        "spent",
+                        "averagePrice",
+                        "runs",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "plan"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/recurring/{id}/resume": {
+      "post": {
+        "summary": "Resume a paused recurring buy.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^rp-[0-9a-f-]{36}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "symbol": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "cadence": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "1m",
+                                "1h",
+                                "1d",
+                                "1w"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "everyMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused"
+                          ]
+                        },
+                        "nextRunAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "bought": {
+                          "type": "string",
+                          "pattern": "^\\d+\\.\\d{8}$",
+                          "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                        },
+                        "spent": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(\\.\\d+)?$",
+                          "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                          "example": "1000.00"
+                        },
+                        "averagePrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^-?\\d+(\\.\\d+)?$",
+                              "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                              "example": "1000.00"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scheduledFor": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "filled",
+                                  "partial",
+                                  "skipped"
+                                ]
+                              },
+                              "quantity": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^\\d+\\.\\d{8}$",
+                                    "description": "Asset quantity as an exact decimal string, 8 fractional digits."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "notional": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(\\.\\d+)?$",
+                                    "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                                    "example": "1000.00"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "scheduledFor",
+                              "status",
+                              "quantity",
+                              "notional",
+                              "reason"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "symbol",
+                        "amount",
+                        "cadence",
+                        "everyMs",
+                        "status",
+                        "nextRunAt",
+                        "bought",
+                        "spent",
+                        "averagePrice",
+                        "runs",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "plan"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exchange/recurring/{id}": {
+      "delete": {
+        "summary": "Delete a recurring buy. Its run history is kept.",
+        "tags": [
+          "exchange"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^rp-[0-9a-f-]{36}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "string"
+                    },
+                    "required": {
+                      "type": "string"
+                    },
+                    "retryAfterSeconds": {
+                      "description": "On 429: seconds until the limit frees a slot. Mirrors `Retry-After`.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/chaos/projection-drift": {
+      "post": {
+        "summary": "Corrupt one projected position on purpose, to measure how long the reconciler takes to notice.",
+        "tags": [
+          "admin"
+        ],
+        "description": "Changes `proj_positions` directly — never the ledger — and records the injection time. The reconciler finding that follows carries that time as `introduced_at`, so `detected_at − introduced_at` is the time-to-detect.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "symbol": {
+                    "default": "DFT",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16
+                  },
+                  "field": {
+                    "type": "string",
+                    "enum": [
+                      "quantity",
+                      "cost_basis"
+                    ]
+                  },
+                  "delta": {
+                    "type": "string",
+                    "pattern": "^-?[0-9]{1,18}$"
+                  }
+                },
+                "required": [
+                  "handle",
+                  "field",
+                  "delta"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "injectionId": {
+                      "type": "string"
+                    },
+                    "injectedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "injectionId",
+                    "injectedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/reconciliation": {
+      "get": {
+        "summary": "Recent reconciler findings, with time-to-detect where the start is known.",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "findings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "expected": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "actual": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "detectedAt": {
+                            "type": "string"
+                          },
+                          "introducedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "timeToDetectMs": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "detail": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "symbol",
+                          "expected",
+                          "actual",
+                          "detectedAt",
+                          "introducedAt",
+                          "timeToDetectMs",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "deadLetters": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "findings",
+                    "deadLetters"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/withdrawals": {
+      "get": {
+        "summary": "Withdrawals that are not finished, those waiting for review first.",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "withdrawals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "clientId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "amount": {
+                            "type": "string",
+                            "pattern": "^-?\\d+(\\.\\d+)?$",
+                            "description": "Cash amount in minor units, rendered as an exact decimal string.",
+                            "example": "1000.00"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "requested",
+                              "held",
+                              "review",
+                              "submitted",
+                              "confirmed",
+                              "failed",
+                              "released"
+                            ]
+                          },
+                          "step": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 3
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "in_progress",
+                              "paid_out",
+                              "returned"
+                            ]
+                          },
+                          "inReview": {
+                            "type": "boolean"
+                          },
+                          "submitAttempts": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "lastRailStatus": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "history": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "requested",
+                                        "held",
+                                        "review",
+                                        "submitted",
+                                        "confirmed",
+                                        "failed",
+                                        "released"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "enum": [
+                                    "requested",
+                                    "held",
+                                    "review",
+                                    "submitted",
+                                    "confirmed",
+                                    "failed",
+                                    "released"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "actor": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to",
+                                "reason",
+                                "actor",
+                                "at"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "guest": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "clientId",
+                          "amount",
+                          "state",
+                          "step",
+                          "outcome",
+                          "inReview",
+                          "submitAttempts",
+                          "lastRailStatus",
+                          "createdAt",
+                          "updatedAt",
+                          "history",
+                          "guest"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "withdrawals"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/withdrawals/{id}/approve": {
+      "post": {
+        "summary": "Approve a withdrawal in review: it goes back into the pipeline as held.",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "approved",
+                        "not_in_review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/withdrawals/{id}/reject": {
+      "post": {
+        "summary": "Reject a withdrawal in review: it fails and the cash returns from hold.",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "released",
+                        "not_in_review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "outcome"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/rail-chaos": {
+      "get": {
+        "summary": "The simulated payout rail's failure knobs.",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeoutButSucceededPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "dropPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "rejectPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "latencyMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 60000
+                    },
+                    "confirmAfterMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "timeoutButSucceededPct",
+                    "dropPct",
+                    "rejectPct",
+                    "latencyMs",
+                    "confirmAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set the simulated payout rail's failure knobs.",
+        "tags": [
+          "admin"
+        ],
+        "description": "Per submission: `timeoutButSucceededPct` records the payment and then times out, `dropPct` times out without recording it, `rejectPct` records a rejection. `confirmAfterMs` is how long an accepted payment stays pending.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "timeoutButSucceededPct": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "dropPct": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "rejectPct": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 60000
+                  },
+                  "confirmAfterMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600000
+                  }
+                },
+                "required": [
+                  "timeoutButSucceededPct",
+                  "dropPct",
+                  "rejectPct",
+                  "latencyMs",
+                  "confirmAfterMs"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeoutButSucceededPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "dropPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "rejectPct": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "latencyMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 60000
+                    },
+                    "confirmAfterMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3600000
+                    }
+                  },
+                  "required": [
+                    "timeoutButSucceededPct",
+                    "dropPct",
+                    "rejectPct",
+                    "latencyMs",
+                    "confirmAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
@@ -5651,6 +8634,10 @@
     {
       "name": "chaos",
       "description": "Server-side concurrency bursts for the demo"
+    },
+    {
+      "name": "admin",
+      "description": "Operator routes behind ADMIN_TOKEN; 404 when it is unset"
     }
   ]
 }

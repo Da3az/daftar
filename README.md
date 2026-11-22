@@ -350,10 +350,22 @@ The cost is two more stateful services and roughly 3 GB of memory (see
 correctness: every guarantee is a PostgreSQL constraint, and PostgreSQL-side
 sweepers re-drive anything a lost job or message would have done.
 
-**Measurements for this part are not taken yet.** The evidence files for the
-broker outage, the replay, time-to-detect, the withdrawal saga and push-versus-
-poll latency will be written from real runs, on the named box, with the
-provenance header — not before.
+**Measured** (local dev box, not the 8 GB target; provenance in each file):
+
+| Claim                                              | Result                                                                                                                      | File                                                           |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Broker stopped for 30 s under load                 | 284 orders filled during the outage; 993/993 events delivered, 0 lost, 0 dead-lettered; backlog cleared ≤ 1 s after restart | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
+| Positions rebuilt from offset 0                    | 2,202 messages in 11.6 s; matches the ledger except the one guest whose fills predate the outbox                            | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
+| Projection drift injected                          | 5/5 detected in ~14.5 s (full-sweep path, 2 s interval)                                                                     | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
+| 60 withdrawals, rail timing out/dropping/rejecting | 54 paid once each, 6 returned, 0 holds left, funding moved by exactly what was paid                                         | [`12-withdrawal-saga.md`](docs/evidence/12-withdrawal-saga.md) |
+| Push vs 2 s polling                                | p50 667 ms vs 2,293 ms; 4,192 vs 9,600 requests/min for 50 viewers                                                          | [`13-live-push.md`](docs/evidence/13-live-push.md)             |
+| Recurring buy, 41 min                              | 41 ticks → 41 runs → 41 orders; a tick during a worker outage ran late, once                                                | [`14-recurring-buys.md`](docs/evidence/14-recurring-buys.md)   |
+
+Three of those runs found bugs, fixed before the numbers above were taken: the
+outbox backlog waited out its outage backoff after the broker was back; a
+scheduler tick's time was read from the wrong field, which could have
+deduplicated a real run away; and Redpanda's image ships in developer mode,
+which bypasses fsync even when `--mode dev-container` is not used.
 
 ```bash
 npm run exchange:db:create      # a separate database: never the seeded one
