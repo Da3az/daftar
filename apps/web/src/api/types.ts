@@ -92,6 +92,10 @@ export interface Balances {
   cash: CashAmount;
   /** Total minus cash reserved by open buy orders. */
   cashAvailable: CashAmount;
+  /** Withdrawals not yet sent to the rail. Yours, not spendable, not in `cash`. */
+  cashOnHold?: CashAmount;
+  /** Withdrawals sent to the rail, awaiting confirmation. Not in `cash`. */
+  cashPending?: CashAmount;
   asset: Quantity;
   /** Total minus coin reserved by open sell orders. */
   assetAvailable: Quantity;
@@ -202,8 +206,14 @@ export interface DepositResult {
   cashBalance: CashAmount;
 }
 
+export type WithdrawalState =
+  'requested' | 'held' | 'review' | 'submitted' | 'confirmed' | 'failed' | 'released';
+
 export interface MovementResult {
-  status: 'completed';
+  /** `completed` for a transfer; a withdrawal reports the saga state it is in. */
+  status: 'completed' | WithdrawalState;
+  /** For a withdrawal: the id its tracker is keyed by. */
+  withdrawalId?: string;
   amount: CashAmount;
   cashBalance: CashAmount;
   /** [CHANGE] Echo of the client id and the commit time, for the receipt. */
@@ -258,6 +268,32 @@ export interface ActivityResponse {
   pending: number;
   /** Newest first. */
   events: ActivityEvent[];
+}
+
+// ----------------------------------------------------------------- withdrawals
+export interface WithdrawalTransition {
+  from: WithdrawalState | null;
+  to: WithdrawalState;
+  reason: string | null;
+  actor: string | null;
+  at: Timestamp;
+}
+
+/** GET /v1/exchange/withdrawals — a withdrawal and its state history. */
+export interface Withdrawal {
+  id: string;
+  clientId: string | null;
+  amount: CashAmount;
+  state: WithdrawalState;
+  /** 0 requested · 1 on hold · 2 sent · 3 done. */
+  step: number;
+  outcome: 'in_progress' | 'paid_out' | 'returned';
+  inReview: boolean;
+  submitAttempts: number;
+  lastRailStatus: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  history: WithdrawalTransition[];
 }
 
 // ----------------------------------------------------------------- projections

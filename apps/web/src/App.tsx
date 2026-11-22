@@ -7,6 +7,7 @@ import { usingMock } from '@/api/mode';
 import { Shell } from '@/app/Shell';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HistoryPage } from '@/features/history/HistoryPage';
+import { AdminPage } from '@/features/admin/AdminPage';
 import { PortfolioPage } from '@/features/portfolio/PortfolioPage';
 import { TradePage } from '@/features/trade/TradePage';
 import { TicketProvider } from '@/features/trade/ticketStore';
@@ -54,6 +55,8 @@ export default function App({ api }: { api: ApiClient }) {
                   <Route index element={<TradePage />} />
                   <Route path="portfolio" element={<PortfolioPage />} />
                   <Route path="history" element={<HistoryPage />} />
+                  {/* Not linked from the navigation; gated by ADMIN_TOKEN on the API. */}
+                  <Route path="admin" element={<AdminPage />} />
                   {import.meta.env.DEV && <Route path="dev/states" element={<DevStatesRoute />} />}
                   <Route
                     path="*"

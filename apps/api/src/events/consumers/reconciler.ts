@@ -188,6 +188,45 @@ async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
   return true;
 }
 
+/**
+ * The withdrawal saga's invariant: a guest's hold account holds exactly the
+ * withdrawals that are not yet confirmed or released. Money in the hold with
+ * no withdrawal to explain it, or a withdrawal whose money is not there, is a
+ * bug in the saga — or a write that went around it.
+ */
+export async function checkHoldBalances(pool: pg.Pool): Promise<number> {
+  const { rows } = await pool.query<{
+    participant_id: bigint;
+    balance: bigint;
+    expected: bigint;
+  }>(
+    `SELECT w.participant_id, a.balance,
+            coalesce(sum(w.amount) FILTER (
+              WHERE w.state IN ('held', 'review', 'submitted', 'failed')), 0)::bigint AS expected
+       FROM withdrawals w
+       JOIN accounts a ON a.id = w.hold_account_id
+      GROUP BY w.participant_id, a.balance
+     HAVING a.balance <> coalesce(sum(w.amount) FILTER (
+              WHERE w.state IN ('held', 'review', 'submitted', 'failed')), 0)`,
+  );
+  let found = 0;
+  for (const r of rows) {
+    if (
+      await record(pool, {
+        participantId: r.participant_id,
+        symbol: 'USD',
+        kind: 'hold_balance_mismatch',
+        expected: r.expected,
+        actual: r.balance,
+        eventId: null,
+      })
+    ) {
+      found += 1;
+    }
+  }
+  return found;
+}
+
 export interface ReconcilerSweeper {
   stop: () => Promise<void>;
 }
@@ -209,6 +248,7 @@ export function startReconcileSweeps(
          SELECT participant_id, symbol, last_event_id FROM proj_positions
          ON CONFLICT (participant_id, symbol) DO NOTHING`,
       );
+      await checkHoldBalances(pool);
     }
 
     const { rows } = await pool.query<DirtyRow>(

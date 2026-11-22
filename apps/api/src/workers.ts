@@ -93,6 +93,18 @@ if (env.CONSUMERS_ENABLED && producer) {
       handler: { kind: 'transactional', apply: markDirty },
     }),
   ];
+  if (queues) {
+    const { dispatchWithdrawal, isWithdrawalDispatchEvent } = await import('./jobs/rail.ts');
+    consumers.push(
+      runConsumer(options, {
+        name: 'withdrawals',
+        groupId: groups.withdrawals,
+        types: isWithdrawalDispatchEvent,
+        startFrom: 'earliest',
+        handler: { kind: 'side-effect', run: dispatchWithdrawal(queues.rail) },
+      }),
+    );
+  }
   consumers.forEach((c, i) => stages[0]!.push({ name: `consumer-${String(i)}`, stop: c.stop }));
 
   const sweeps = startReconcileSweeps(pool, { intervalMs: env.RECONCILE_INTERVAL_MS, log: logger });
@@ -124,7 +136,20 @@ if (env.JOBS_ENABLED && queues) {
   const { declareMaintenanceSchedules, startMaintenanceWorker } =
     await import('./jobs/maintenance.ts');
   await declareMaintenanceSchedules(queues, { equityEveryMs: env.EQUITY_SNAPSHOT_EVERY_MS });
-  workers.push(startMaintenanceWorker(pool, redis, logger));
+  workers.push(startMaintenanceWorker(pool, queues, redis, logger));
+  const { startRailWorker } = await import('./jobs/rail.ts');
+  workers.push(
+    startRailWorker(
+      pool,
+      queues,
+      redis,
+      {
+        pollDeadlineMs: env.RAIL_POLL_DEADLINE_MS,
+        submitRatePerSecond: env.RAIL_SUBMIT_RATE_PER_SECOND,
+      },
+      logger,
+    ),
+  );
 }
 
 for (const worker of workers) {

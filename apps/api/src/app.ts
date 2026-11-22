@@ -31,6 +31,7 @@ import { chaosRoutes } from './routes/chaos.ts';
 import { exchangeRoutes } from './routes/exchange.ts';
 import { portfolioRoutes } from './routes/exchange-portfolio.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { withdrawalRoutes } from './routes/exchange-withdrawals.ts';
 import { OPENAPI_DOCUMENT } from './openapi/document.ts';
 
 declare module 'fastify' {
@@ -294,6 +295,7 @@ export async function buildApp(options: BuildAppOptions): Promise<App> {
   await app.register(chaosRoutes);
   await app.register(exchangeRoutes);
   await app.register(portfolioRoutes);
+  await app.register(withdrawalRoutes);
   await app.register(adminRoutes);
 
   return app;

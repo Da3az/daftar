@@ -41,7 +41,8 @@ export interface Leg {
   amount: bigint;
 }
 
-export type TransactionKind = 'funding' | 'payout' | 'buy' | 'sell' | 'adjustment';
+export type TransactionKind =
+  'funding' | 'payout' | 'buy' | 'sell' | 'adjustment' | 'hold' | 'release';
 
 export interface PostRequest {
   kind: TransactionKind;

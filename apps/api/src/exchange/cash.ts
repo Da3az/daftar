@@ -62,7 +62,7 @@ export async function ensureFundingAccount(pool: pg.Pool): Promise<bigint> {
   return rows[0]!.id;
 }
 
-interface Mover {
+export interface Mover {
   id: bigint;
   externalId: string;
   cashAccountId: bigint;
@@ -100,7 +100,7 @@ async function availableCash(pool: pg.Pool, mover: Mover): Promise<bigint> {
  * this same transaction, so a replay can answer with the figure the original
  * request got. Returns the row's `created_at`.
  */
-async function recordMovement(
+export async function recordMovement(
   client: pg.PoolClient,
   row: {
     externalId: string;
@@ -417,6 +417,15 @@ export interface Contributions {
  * Signs: the ledger stores a debit as a negative amount, so withdrawals and
  * transfers out are negated here to be shown as positive parts.
  *
+ * Withdrawals count when they are **paid out**, not when they are requested.
+ * Since the withdrawal saga, the `payout` leg is on the guest's hold account,
+ * so that account's entries are read too; the `hold` and `release` legs move
+ * the guest's own money between their two accounts and are neither money in
+ * nor money out. A withdrawal in flight therefore leaves "put in" unchanged —
+ * and equity counts the held cash, so it does not show as a loss.
+ * (Withdrawals from before the saga paid out from the cash account directly,
+ * and are still counted there.)
+ *
  * Profit and loss is equity minus `net`. Measured against the fixed opening
  * balance instead, a deposit would read as profit.
  */
@@ -439,7 +448,10 @@ export async function contributionsOf(
               ) AS from_faucet
          FROM entries e
          JOIN ledger_transactions t ON t.id = e.transaction_id
-        WHERE e.account_id = $1::bigint
+        WHERE (e.account_id = $1::bigint OR e.account_id = (
+                SELECT h.id FROM accounts h
+                  JOIN participants p ON h.external_id = p.external_id || ':cash_hold'
+                 WHERE p.cash_account_id = $1::bigint))
           AND t.kind IN ('funding', 'payout', 'adjustment')
      )
      SELECT
@@ -544,7 +556,7 @@ export interface LedgerLine {
  * trade's four legs carry the amounts the guest already sees, and a receipt
  * that hid half of them would not balance. Labels come from a fixed set —
  * "Your cash", "<display name> · cash", "Payment provider · clearing",
- * "Outside world", "House · <unit>" — so an account id can never reach the
+ * "Outside world", "House · <unit>", "Your cash · on hold" — so an account id can never reach the
  * screen through a fallback.
  */
 export async function ledgerLinesFor(
@@ -566,14 +578,19 @@ export async function ledgerLinesFor(
     owner_id: bigint | null;
     owner_name: string | null;
     is_cash: boolean;
+    is_hold: boolean;
   }>(
     `SELECT e.transaction_id, e.amount, e.unit, a.external_id AS account_external_id,
-            coalesce(pc.id, pa.id) AS owner_id,
-            coalesce(pc.display_name, pa.display_name) AS owner_name,
-            (pc.id IS NOT NULL) AS is_cash
+            coalesce(pc.id, pa.id, ph.id) AS owner_id,
+            coalesce(pc.display_name, pa.display_name, ph.display_name) AS owner_name,
+            (pc.id IS NOT NULL) AS is_cash,
+            (ph.id IS NOT NULL) AS is_hold
        FROM entries e
        JOIN accounts a ON a.id = e.account_id
        LEFT JOIN participants pc ON pc.cash_account_id = a.id
+       LEFT JOIN participants ph
+              ON a.kind = 'customer_hold'
+             AND ph.external_id = left(a.external_id, length(a.external_id) - length(':cash_hold'))
        LEFT JOIN participants pa
               ON a.asset_symbol IS NOT NULL
              AND pa.external_id = left(a.external_id, length(a.external_id) - length(a.asset_symbol) - 1)
@@ -586,7 +603,7 @@ export async function ledgerLinesFor(
 
   for (const r of rows) {
     let account: string;
-    const what = r.is_cash ? 'cash' : r.unit;
+    const what = r.is_hold ? 'cash · on hold' : r.is_cash ? 'cash' : r.unit;
     if (r.owner_id !== null && r.owner_id === viewer.id) {
       account = `Your ${what}`;
     } else if (r.owner_id !== null && r.owner_name !== null) {
@@ -635,7 +652,14 @@ export async function ownReferencesFor(
      UNION ALL
      SELECT m.transaction_id, m.external_id
        FROM cash_movements m
-      WHERE m.transaction_id = ANY($1::bigint[]) AND m.participant_id = $2::bigint`,
+      WHERE m.transaction_id = ANY($1::bigint[]) AND m.participant_id = $2::bigint
+     UNION ALL
+     -- A withdrawal's later ledger transactions (paid out, or returned) carry
+     -- the reference of the request that started it.
+     SELECT tx.id, w.external_id
+       FROM withdrawals w
+       CROSS JOIN LATERAL (VALUES (w.settle_tx_id), (w.release_tx_id)) AS tx(id)
+      WHERE tx.id = ANY($1::bigint[]) AND w.participant_id = $2::bigint`,
     [transactionIds.map(String), viewer.id.toString()],
   );
   for (const r of rows) refs.set(r.transaction_id, r.external_id);

@@ -24,6 +24,7 @@ import { ActivityFeed } from '../history/HistoryPage';
 import { holdingsOf } from '../trade/YourMoney';
 import { CashPanel } from './CashPanel';
 import { EquityPanel, PositionPanel } from './PositionPanels';
+import { WithdrawalTracker } from './WithdrawalTracker';
 
 function SumRow({
   sign,
@@ -77,6 +78,13 @@ function Sums({ me, lastPrice }: { me: Me; lastPrice: string | undefined }) {
           }
           value={showCash(h.coinValue)}
         />
+        {h.withdrawing > 0n && (
+          <SumRow
+            sign="+"
+            label="Withdrawals on their way out (on hold or with the rail)"
+            value={showCash(h.withdrawing)}
+          />
+        )}
         <SumRow sign="=" total label="Worth in total" value={showCash(h.equity)} />
       </section>
       <section>
@@ -261,6 +269,7 @@ export function PortfolioPage() {
         <Sums me={guest} lastPrice={lastPrice} />
       </Panel>
 
+      <WithdrawalTracker />
       <PositionPanel />
       <EquityPanel />
 

@@ -18,6 +18,7 @@ import type {
   PlaceOrderRequest,
   PlaceOrderResult,
   Recipient,
+  Withdrawal,
 } from '@/api/types';
 import { formatCash, parseCash } from '@/lib/money';
 import { EquityRecorder, positionFromFills } from './projections';
@@ -288,6 +289,7 @@ export class MockApiClient implements ApiClient {
   readonly #deposits = new SlidingWindow(10, 3_600_000);
   readonly #idempotency = new Map<string, IdempotencyRecord>();
   readonly #equity = new EquityRecorder();
+  readonly #withdrawals: Withdrawal[] = [];
 
   constructor(opts: { engine: () => MatchingEngine }) {
     this.#engine = opts.engine;
@@ -310,6 +312,7 @@ export class MockApiClient implements ApiClient {
   engineReplaced(): void {
     this.#idempotency.clear();
     this.#equity.clear();
+    this.#withdrawals.length = 0;
   }
 
   // ---------------------------------------------------------------- plumbing
@@ -706,8 +709,53 @@ export class MockApiClient implements ApiClient {
         amount,
         request.clientId,
       );
-      return unwrap(this.#engine().withdraw(id, request.clientId, amount));
+      const result = unwrap(this.#engine().withdraw(id, request.clientId, amount));
+      // The mock has no payout rail: a withdrawal is paid out at once, and its
+      // tracker shows the states the real saga would pass through.
+      const existing = this.#withdrawals.find((w) => w.clientId === request.clientId);
+      const withdrawalId = existing?.id ?? String(this.#withdrawals.length + 1);
+      if (!existing) {
+        const at = result.occurredAt;
+        const step = (
+          from: Withdrawal['state'] | null,
+          to: Withdrawal['state'],
+          reason: string,
+        ) => ({
+          from,
+          to,
+          reason,
+          actor: 'mock',
+          at,
+        });
+        this.#withdrawals.unshift({
+          id: withdrawalId,
+          clientId: request.clientId,
+          amount: result.amount,
+          state: 'confirmed',
+          step: 3,
+          outcome: 'paid_out',
+          inReview: false,
+          submitAttempts: 1,
+          lastRailStatus: 'confirmed',
+          createdAt: at,
+          updatedAt: at,
+          history: [
+            step(null, 'requested', 'requested by the guest'),
+            step('requested', 'held', 'cash moved to hold'),
+            step('held', 'submitted', 'sent to the payout rail'),
+            step('submitted', 'confirmed', 'rail confirmed the payout'),
+          ],
+        });
+      }
+      return { ...result, status: 'confirmed' as const, withdrawalId };
     });
+  }
+
+  listWithdrawals(limit?: number): Promise<{ withdrawals: Withdrawal[] }> {
+    return this.#sessionRead(
+      () => ({ withdrawals: this.#withdrawals.slice(0, limit ?? 20) }),
+      () => check(intIssue(limit, 'limit', 1, 100)),
+    );
   }
 
   transfer(request: {

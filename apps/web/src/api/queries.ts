@@ -21,6 +21,7 @@ export const keys = {
   fills: ['fills'] as const,
   activity: ['activity'] as const,
   position: ['position'] as const,
+  withdrawals: ['withdrawals'] as const,
   equity: (range: EquityRange) => ['equity', range] as const,
 };
 
@@ -110,6 +111,20 @@ export function usePosition() {
   });
 }
 
+/** A withdrawal moves on within seconds while it is in flight; idle otherwise. */
+export function useWithdrawals() {
+  const api = useApi();
+  const enabled = useHasSession();
+  return useQuery({
+    queryKey: keys.withdrawals,
+    queryFn: () => api.listWithdrawals(20),
+    refetchInterval: (query) =>
+      query.state.data?.withdrawals.some((w) => w.outcome === 'in_progress') ? 2_000 : 15_000,
+    enabled,
+    ...common,
+  });
+}
+
 /** Snapshots arrive every few minutes; polling faster would only refetch the same points. */
 export function useEquity(range: EquityRange) {
   const api = useApi();
@@ -127,7 +142,15 @@ export function useEquity(range: EquityRange) {
 export function useRefreshSession(): () => void {
   const client = useQueryClient();
   return () => {
-    for (const key of [keys.me, keys.orders, keys.fills, keys.activity, keys.market, keys.position])
+    for (const key of [
+      keys.me,
+      keys.orders,
+      keys.fills,
+      keys.activity,
+      keys.market,
+      keys.position,
+      keys.withdrawals,
+    ])
       void client.invalidateQueries({ queryKey: key });
   };
 }

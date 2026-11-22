@@ -23,6 +23,8 @@ export interface Holdings {
   coinFree: bigint;
   coinAside: bigint;
   coinValue: bigint;
+  /** Withdrawals on hold or with the payout rail: still yours, not spendable, not in `cash`. */
+  withdrawing: bigint;
   equity: bigint;
 }
 
@@ -35,6 +37,9 @@ export function holdingsOf(me: Me, lastPrice: string | undefined): Holdings | nu
   if (cash === null || cashFree === null || coin === null || coinFree === null || price === null)
     return null;
   const coinValue = notional(price, coin);
+  const withdrawing =
+    (parseCash(me.balances.cashOnHold ?? '0.00') ?? 0n) +
+    (parseCash(me.balances.cashPending ?? '0.00') ?? 0n);
   return {
     cash,
     cashFree,
@@ -43,7 +48,8 @@ export function holdingsOf(me: Me, lastPrice: string | undefined): Holdings | nu
     coinFree,
     coinAside: coin - coinFree,
     coinValue,
-    equity: cash + coinValue,
+    withdrawing,
+    equity: cash + coinValue + withdrawing,
   };
 }
 

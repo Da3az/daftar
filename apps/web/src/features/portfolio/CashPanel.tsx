@@ -354,7 +354,9 @@ function Withdraw({ me }: { me: Me }) {
         </p>
       )}
       <p className="text-sm text-ink-3">
-        Play money goes nowhere real: a withdrawal simply leaves this account.
+        The cash moves to a hold straight away, so it cannot be spent twice, and is paid out once
+        the (simulated) payout rail confirms — or returned here if it refuses. Large amounts wait
+        for a review first. Play money goes nowhere real.
       </p>
       <Button type="submit" variant="brand" disabled={cents === null || withdraw.isPending}>
         {withdraw.isPending ? 'Withdrawing…' : `Withdraw${cents ? ` ${showCash(cents)}` : ''}`}
@@ -363,7 +365,13 @@ function Withdraw({ me }: { me: Me }) {
       {withdraw.data && (
         <Done
           result={withdraw.data}
-          verb="Withdrew"
+          verb={
+            withdraw.data.status === 'review'
+              ? 'Withdrawal waiting for review:'
+              : withdraw.data.status === 'confirmed'
+                ? 'Withdrew'
+                : 'Withdrawal on hold:'
+          }
           onReceipt={() => receipt.open(withdraw.data.clientId)}
         />
       )}

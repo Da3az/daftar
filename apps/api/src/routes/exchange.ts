@@ -33,9 +33,13 @@ import {
   contributionsOf,
   pendingActivity,
   transfer,
-  withdraw,
 } from '../exchange/cash.ts';
 import { GUEST_STARTING_CASH, createGuest, findParticipant } from '../exchange/participants.ts';
+import {
+  findWithdrawalByExternalId,
+  holdSplit,
+  requestWithdrawal,
+} from '../exchange/withdrawals.ts';
 import {
   CANDLE_INTERVALS,
   getBalances,
@@ -213,6 +217,13 @@ const ParticipantOut = z.object({
 const BalancesOut = z.object({
   cash: CashAmountOut,
   cashAvailable: CashAmountOut,
+  cashOnHold: CashAmountOut.optional().describe(
+    'Withdrawals not yet sent to the payout rail (held, in review, or failed and being ' +
+      'released). Still yours, not spendable. Not included in `cash`.',
+  ),
+  cashPending: CashAmountOut.optional().describe(
+    'Withdrawals sent to the rail and awaiting its confirmation. Not included in `cash`.',
+  ),
   asset: QuantityOut,
   assetAvailable: QuantityOut,
 });
@@ -224,7 +235,13 @@ const MovementBody = {
 };
 
 const MovementOut = z.object({
-  status: z.literal('completed'),
+  status: z
+    .enum(['completed', 'held', 'review', 'submitted', 'confirmed', 'failed', 'released'])
+    .describe(
+      '`completed` for a transfer. For a withdrawal, the state it is in: it is a saga now — ' +
+        'see GET /v1/exchange/withdrawals for its progress.',
+    ),
+  withdrawalId: z.string().optional().describe('For a withdrawal: the id its tracker is keyed by.'),
   amount: CashAmountOut,
   cashBalance: CashAmountOut.describe(
     'The cash the movement left. On a replay, the figure the original request got.',
@@ -376,10 +393,24 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       balance = rows[0]?.balance ?? 0n;
     }
 
+    const saga =
+      stored.kind === 'withdrawal'
+        ? await findWithdrawalByExternalId(
+            app.pool,
+            participant.id,
+            storedOrderId(participant.externalId, clientId),
+          )
+        : null;
+
     return {
       status: 200 as const,
       body: {
-        status: 'completed' as const,
+        status: saga
+          ? saga.state === 'requested'
+            ? ('held' as const)
+            : saga.state
+          : ('completed' as const),
+        ...(saga ? { withdrawalId: saga.id.toString() } : {}),
         amount: formatCash(stored.amount),
         cashBalance: formatCash(balance),
         clientId,
@@ -504,12 +535,13 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const { symbol } = request.query;
 
-      const [balances, openOrders, contributed, pendingEvents] = await timed(request, () =>
+      const [balances, openOrders, contributed, pendingEvents, holds] = await timed(request, () =>
         Promise.all([
           getBalances(app.pool, participant, symbol),
           listOrders(app.pool, participant.id, { openOnly: true, limit: 100 }),
           contributionsOf(app.pool, participant.cashAccountId),
           pendingActivity(app.pool, participant.cashAccountId),
+          holdSplit(app.pool, participant.id),
         ]),
       );
 
@@ -534,6 +566,8 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
         balances: {
           cash: formatCash(balances.cash),
           cashAvailable: formatCash(clamp(balances.cashAvailable)),
+          cashOnHold: formatCash(holds.onHold),
+          cashPending: formatCash(holds.pending),
           asset: formatQuantity(balances.asset),
           assetAvailable: formatQuantity(clamp(balances.assetAvailable)),
         },
@@ -1375,11 +1409,13 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
       tags: ['exchange'],
       summary: 'Withdraw cash from the session’s account.',
       description: [
-        'One two-leg ledger transaction: the guest is debited and',
-        '`external:funding` credited. It does **not** take the market lock, so it',
-        'can overlap a fill against the same cash account; the ledger’s account',
-        'lock and non-negative check are what keep both from spending the same',
-        'money. Cash reserved by open buy orders cannot be withdrawn.',
+        'Starts a withdrawal. The cash moves into the guest’s **hold account** in',
+        'this request — one ledger transaction, under the account lock and the',
+        'non-negative check, so it can no longer be spent — and the payout happens',
+        'asynchronously: submitted to the payout rail, then confirmed (hold → outside',
+        'world) or failed and released (hold → back to cash). Amounts at or above the',
+        'review threshold wait for an operator first. Cash reserved by open buy',
+        'orders cannot be withdrawn. Track it with GET /v1/exchange/withdrawals.',
       ].join('\n'),
       body: z.object(MovementBody).strict(),
       response: {
@@ -1419,18 +1455,20 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
 
       try {
         const result = await timed(request, () =>
-          withdraw(app.pool, {
+          requestWithdrawal(app.pool, {
             mover: participant,
             externalId: storedOrderId(participant.externalId, clientId),
             amount,
+            reviewThreshold: env.WITHDRAWAL_REVIEW_THRESHOLD,
           }),
         );
 
-        if (result.status === 'moved') {
+        if (result.status === 'requested') {
           request.ctx.retryCount = result.attempts - 1;
           reply.status(201);
           return {
-            status: 'completed' as const,
+            status: result.withdrawal.state === 'review' ? ('review' as const) : ('held' as const),
+            withdrawalId: result.withdrawal.id.toString(),
             amount: formatCash(amount),
             cashBalance: formatCash(result.balanceAfter),
             clientId,
@@ -1449,8 +1487,7 @@ export const exchangeRoutes: FastifyPluginAsyncZod = async (app) => {
           };
         }
 
-        // `unknown_recipient` and `self_transfer` belong to transfers.
-        throw new Error(`unexpected withdrawal outcome ${result.status}`);
+        throw new Error('unexpected withdrawal outcome');
       } catch (err) {
         const code = sqlstateOf(err);
         request.ctx.sqlstate = code ?? null;

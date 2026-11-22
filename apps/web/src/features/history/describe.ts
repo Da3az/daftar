@@ -39,6 +39,34 @@ export function describeEvent(event: ActivityEvent): Described {
       return { title: 'Deposit credited by the payment provider', direction: 1, kind: 'deposit' };
     case 'withdrawal.completed':
       return { title: 'Withdrawal completed', direction: -1, kind: 'withdrawal' };
+    // The withdrawal saga. Only `held`/`review` and `released` move your cash;
+    // the steps between move nothing and say so with direction 0.
+    case 'withdrawal.held':
+      return {
+        title: 'Withdrawal requested — cash moved to hold',
+        direction: -1,
+        kind: 'withdrawal',
+      };
+    case 'withdrawal.review':
+      return { title: 'Withdrawal waiting for a review', direction: -1, kind: 'withdrawal' };
+    case 'withdrawal.approved':
+      return { title: 'Withdrawal approved on review', direction: 0, kind: 'withdrawal' };
+    case 'withdrawal.submitted':
+      return { title: 'Withdrawal sent to the payout rail', direction: 0, kind: 'withdrawal' };
+    case 'withdrawal.requeued':
+      return {
+        title: 'Withdrawal re-sent — the rail had no record of it',
+        direction: 0,
+        kind: 'withdrawal',
+      };
+    case 'withdrawal.confirmed':
+      return { title: 'Withdrawal paid out', direction: 0, kind: 'withdrawal' };
+    case 'withdrawal.released':
+      return {
+        title: 'Withdrawal failed — cash returned from hold',
+        direction: 1,
+        kind: 'withdrawal',
+      };
     case 'transfer.sent':
       return { title: `Sent to ${who(event.counterparty)}`, direction: -1, kind: 'transfer' };
     case 'transfer.received':

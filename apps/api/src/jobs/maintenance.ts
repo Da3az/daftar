@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import type pg from 'pg';
 import { jobOutcomes } from '../observability/metrics.ts';
 import { takeEquitySnapshots } from './equity.ts';
+import { sweepWithdrawals } from './rail.ts';
 import { createRedis, type Queues, type RedisConfig } from './queues.ts';
 
 /**
@@ -14,6 +15,7 @@ import { createRedis, type Queues, type RedisConfig } from './queues.ts';
  */
 
 export const EQUITY_SCHEDULER_ID = 'equity-snapshot';
+export const WITHDRAWAL_SWEEP_ID = 'withdrawal-sweep';
 
 /**
  * The time a scheduler job was **meant** to run. BullMQ's scheduler jobs carry
@@ -34,9 +36,19 @@ export async function declareMaintenanceSchedules(
     { every: options.equityEveryMs },
     { name: 'equity.snapshot', data: {} },
   );
+  await queues.maintenance.upsertJobScheduler(
+    WITHDRAWAL_SWEEP_ID,
+    { every: 60_000 },
+    { name: 'withdrawals.sweep', data: {} },
+  );
 }
 
-export function startMaintenanceWorker(pool: pg.Pool, redis: RedisConfig, log: Logger): Worker {
+export function startMaintenanceWorker(
+  pool: pg.Pool,
+  queues: Queues,
+  redis: RedisConfig,
+  log: Logger,
+): Worker {
   const worker = new Worker(
     'maintenance',
     async (job) => {
@@ -45,6 +57,11 @@ export function startMaintenanceWorker(pool: pg.Pool, redis: RedisConfig, log: L
         const written = await takeEquitySnapshots(pool, bucket);
         jobOutcomes.inc({ queue: 'maintenance', outcome: written > 0 ? 'completed' : 'noop' });
         return { written };
+      }
+      if (job.name === 'withdrawals.sweep') {
+        const redriven = await sweepWithdrawals(pool, queues, log);
+        jobOutcomes.inc({ queue: 'maintenance', outcome: redriven > 0 ? 'completed' : 'noop' });
+        return { redriven };
       }
       throw new Error(`unknown maintenance job ${job.name}`);
     },

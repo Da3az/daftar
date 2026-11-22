@@ -18,6 +18,7 @@ import type {
   PlaceOrderRequest,
   PlaceOrderResult,
   Recipient,
+  Withdrawal,
 } from './types';
 
 const BASE = '/v1/exchange';
@@ -215,5 +216,11 @@ export class HttpApiClient implements ApiClient {
 
   async getEquity(range: EquityRange): Promise<EquityResponse> {
     return (await this.#send('GET', '/equity', { query: { range } })).body as EquityResponse;
+  }
+
+  async listWithdrawals(limit?: number): Promise<{ withdrawals: Withdrawal[] }> {
+    return (await this.#send('GET', '/withdrawals', { query: { limit } })).body as {
+      withdrawals: Withdrawal[];
+    };
   }
 }

@@ -66,6 +66,12 @@ export const accountKind = pgEnum('account_kind', [
    * keeps SUM(entries.amount) = 0 true globally rather than only per customer.
    */
   'external_funding',
+  /**
+   * Cash a guest has asked to withdraw, parked until the payout rail answers.
+   * Still the guest's money — it counts in equity — but no longer spendable.
+   * Added by migration 0015.
+   */
+  'customer_hold',
 ]);
 
 export const accounts = pgTable(
@@ -190,6 +196,10 @@ export const transactionKind = pgEnum('transaction_kind', [
   'sell',
   /** An internal correction. Never an UPDATE — always a new, opposing transaction. */
   'adjustment',
+  /** Cash moved from a guest's cash account into their hold account for a withdrawal. */
+  'hold',
+  /** A failed withdrawal's hold returned to the guest's cash account. */
+  'release',
 ]);
 
 /**

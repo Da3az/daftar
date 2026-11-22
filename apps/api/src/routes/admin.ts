@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { rejectUnlessAdmin } from '../plugins/admin.ts';
+import { getRailChaos, setRailChaos } from '../exchange/rail.ts';
+import {
+  approve,
+  getWithdrawal,
+  listForReview,
+  release,
+  transitionsOf,
+} from '../exchange/withdrawals.ts';
+import { WithdrawalOut, withdrawalOut } from './exchange-withdrawals.ts';
 
 /**
  * # Admin routes
@@ -157,6 +166,139 @@ export const adminRoutes: FastifyPluginAsyncZod = async (app) => {
         })),
         deadLetters: dead[0]!.n,
       };
+    },
+  });
+
+  /* ------------------------------------------------------ withdrawal review */
+
+  const ReviewItem = WithdrawalOut.extend({ guest: z.string() });
+
+  app.route({
+    method: 'GET',
+    url: '/v1/admin/withdrawals',
+    schema: {
+      tags: ['admin'],
+      summary: 'Withdrawals that are not finished, those waiting for review first.',
+      querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+      response: {
+        200: z.object({ withdrawals: z.array(ReviewItem) }),
+        401: AdminError,
+        404: AdminError,
+      },
+    },
+    handler: async (request, reply) => {
+      if (rejectUnlessAdmin(request, reply)) return reply;
+      const list = await listForReview(app.pool, request.query.limit);
+      const history = await transitionsOf(
+        app.pool,
+        list.map((w) => w.id),
+      );
+      const { rows } = await app.pool.query<{ id: bigint; display_name: string }>(
+        'SELECT id, display_name FROM participants WHERE id = ANY($1::bigint[])',
+        [list.map((w) => w.participantId.toString())],
+      );
+      const names = new Map(rows.map((r) => [r.id, r.display_name]));
+      return {
+        withdrawals: list.map((w) => ({
+          ...withdrawalOut(w, history.get(w.id) ?? [], null),
+          guest: names.get(w.participantId) ?? '—',
+        })),
+      };
+    },
+  });
+
+  const Decision = z.object({ id: z.string().regex(/^[0-9]{1,19}$/) });
+
+  app.route({
+    method: 'POST',
+    url: '/v1/admin/withdrawals/:id/approve',
+    schema: {
+      tags: ['admin'],
+      summary: 'Approve a withdrawal in review: it goes back into the pipeline as held.',
+      params: Decision,
+      response: {
+        200: z.object({ outcome: z.enum(['approved', 'not_in_review']) }),
+        401: AdminError,
+        404: AdminError,
+      },
+    },
+    handler: async (request, reply) => {
+      if (rejectUnlessAdmin(request, reply)) return reply;
+      const done = await approve(app.pool, BigInt(request.params.id), 'admin');
+      return { outcome: done ? ('approved' as const) : ('not_in_review' as const) };
+    },
+  });
+
+  app.route({
+    method: 'POST',
+    url: '/v1/admin/withdrawals/:id/reject',
+    schema: {
+      tags: ['admin'],
+      summary: 'Reject a withdrawal in review: it fails and the cash returns from hold.',
+      params: Decision,
+      response: {
+        200: z.object({ outcome: z.enum(['released', 'not_in_review']) }),
+        401: AdminError,
+        404: AdminError,
+      },
+    },
+    handler: async (request, reply) => {
+      if (rejectUnlessAdmin(request, reply)) return reply;
+      const id = BigInt(request.params.id);
+      const w = await getWithdrawal(app.pool, id);
+      if (!w || w.state !== 'review') return { outcome: 'not_in_review' as const };
+      const outcome = await release(app.pool, id, 'rejected on review', 'admin');
+      return { outcome: outcome === 'done' ? ('released' as const) : ('not_in_review' as const) };
+    },
+  });
+
+  /* ---------------------------------------------------------- rail chaos */
+
+  const Chaos = z
+    .object({
+      timeoutButSucceededPct: z.number().int().min(0).max(100),
+      dropPct: z.number().int().min(0).max(100),
+      rejectPct: z.number().int().min(0).max(100),
+      latencyMs: z.number().int().min(0).max(60_000),
+      confirmAfterMs: z.number().int().min(0).max(3_600_000),
+    })
+    .strict()
+    .refine(
+      (c) => c.timeoutButSucceededPct + c.dropPct + c.rejectPct <= 100,
+      'the three percentages must sum to at most 100',
+    );
+
+  app.route({
+    method: 'GET',
+    url: '/v1/admin/rail-chaos',
+    schema: {
+      tags: ['admin'],
+      summary: "The simulated payout rail's failure knobs.",
+      response: { 200: Chaos, 401: AdminError, 404: AdminError },
+    },
+    handler: async (request, reply) => {
+      if (rejectUnlessAdmin(request, reply)) return reply;
+      return getRailChaos(app.pool);
+    },
+  });
+
+  app.route({
+    method: 'PUT',
+    url: '/v1/admin/rail-chaos',
+    schema: {
+      tags: ['admin'],
+      summary: "Set the simulated payout rail's failure knobs.",
+      description:
+        'Per submission: `timeoutButSucceededPct` records the payment and then times out, ' +
+        '`dropPct` times out without recording it, `rejectPct` records a rejection. ' +
+        '`confirmAfterMs` is how long an accepted payment stays pending.',
+      body: Chaos,
+      response: { 200: Chaos, 401: AdminError, 404: AdminError },
+    },
+    handler: async (request, reply) => {
+      if (rejectUnlessAdmin(request, reply)) return reply;
+      await setRailChaos(app.pool, request.body);
+      return getRailChaos(app.pool);
     },
   });
 };

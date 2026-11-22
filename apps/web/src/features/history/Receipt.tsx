@@ -1,10 +1,10 @@
 import { useSearchParams } from 'react-router';
-import { useActivity, useFills, useOrders } from '@/api/queries';
+import { useActivity, useFills, useOrders, useWithdrawals } from '@/api/queries';
 import { Callout, CopyButton, Num, SideTag } from '@/components/bits';
 import { Sheet, SheetContent, SheetDescription } from '@/components/ui/sheet';
 import { showCash, showQty } from '@/lib/money';
 import { QUOTE } from '@/lib/rules';
-import { showExact, showLag } from '@/lib/time';
+import { showDateTime, showExact, showLag } from '@/lib/time';
 import { describeEvent, describeStatus } from './describe';
 import { Ledger } from './Ledger';
 
@@ -46,6 +46,8 @@ export function ReceiptSheet() {
   const events = (activity.data?.events ?? []).filter((event) => event.reference === reference);
   const ownFills = (fills.data?.fills ?? []).filter((fill) => fill.clientOrderId === reference);
   const order = (orders.data?.orders ?? []).find((item) => item.clientOrderId === reference);
+  const withdrawals = useWithdrawals();
+  const withdrawal = (withdrawals.data?.withdrawals ?? []).find((w) => w.clientId === reference);
   const first = events[0];
   const status = order ? describeStatus(order) : null;
   const loading = activity.isPending || fills.isPending || orders.isPending;
@@ -162,6 +164,27 @@ export function ReceiptSheet() {
                     </div>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {withdrawal && (
+              <section>
+                <h3 className="font-display text-lg font-semibold">How this withdrawal went</h3>
+                <p className="mb-3 text-sm text-ink-2">
+                  Every state change, as the database recorded it.
+                </p>
+                <ol className="flex flex-col gap-1 text-sm">
+                  {withdrawal.history.map((t, i) => (
+                    <li key={i} className="flex gap-4">
+                      <span className="num w-44 flex-none text-ink-3">{showDateTime(t.at)}</span>
+                      <span className="text-ink-2">
+                        {t.from ? `${t.from} → ` : ''}
+                        <b className="font-semibold text-ink">{t.to}</b>
+                        {t.reason ? ` — ${t.reason}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
               </section>
             )}
 

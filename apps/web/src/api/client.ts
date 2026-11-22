@@ -17,6 +17,7 @@ import type {
   PlaceOrderRequest,
   PlaceOrderResult,
   Recipient,
+  Withdrawal,
 } from './types';
 
 /** Every non-2xx answer. `status` decides rate limiting (429); `code` decides everything else. */
@@ -102,4 +103,6 @@ export interface ApiClient {
   getPosition(): Promise<Position>;
   /** GET /v1/exchange/equity — snapshot series; missed slots are absent, not interpolated. */
   getEquity(range: EquityRange): Promise<EquityResponse>;
+  /** GET /v1/exchange/withdrawals — newest first, each with its state history. */
+  listWithdrawals(limit?: number): Promise<{ withdrawals: Withdrawal[] }>;
 }
