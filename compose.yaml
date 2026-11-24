@@ -74,58 +74,95 @@ services:
   # The event log. PostgreSQL's outbox stays the source of truth; this is the
   # relay's destination and the projections' replay source.
   #
-  # v26.2.x, not 26.3.x: 26.3 is the first release under the Community Edition
-  # licence, whose "internal business purposes" grant does not obviously cover
-  # a public demo. 26.2 is BSL 1.1, whose only restriction is a commercial
-  # streaming service where third parties create topics. Supported until
-  # 2027-07-28 — see claude-plans / decisions.md for the revisit.
+  # Apache Kafka (Apache 2.0), one node acting as both broker and KRaft
+  # controller. 4.2.x because 4.2 is the newest Kafka the client
+  # (@platformatic/kafka) runs its CI against — Confluent Platform 8.2, which
+  # ships Apache Kafka 4.2. Redpanda before it: see docs/infrastructure.md.
   #
-  # **Not `--mode dev-container`.** That mode adds `--unsafe-bypass-fsync` and
-  # turns write caching on, and a hard kill then loses records the broker had
-  # already acknowledged — which would make every "nothing lost" measurement
-  # here a measurement of luck. The flags below are the parts of dev-container
-  # that are about running in a shared container, without the parts that are
-  # about durability.
-  redpanda:
-    image: redpandadata/redpanda:v26.2.7
-    container_name: daftar-redpanda
+  # The image builds server.properties from KAFKA_* variables (`.` → `_`), and
+  # when any are set it does NOT start from its bundled defaults — so every
+  # required property is spelled out below, including the replication factors
+  # that default to 3 and would stop a single node from creating the
+  # consumer-offsets topic (no consumer groups at all).
+  #
+  # Durability: Kafka's default flushing, deliberately. A write is acked once
+  # it is in the page cache; a broker *process* crash loses nothing, a *host*
+  # crash or power cut can lose the last few seconds of acked events. See
+  # docs/infrastructure.md, "Event log durability".
+  kafka:
+    image: apache/kafka:4.2.2
+    container_name: daftar-kafka
+    hostname: kafka
     restart: unless-stopped
-    # The image's own /etc/redpanda/redpanda.yaml ships `developer_mode: true`,
-    # and in developer mode rpk adds `--unsafe-bypass-fsync` by itself — found
-    # on the first start of this file, in the broker's own log. So the start
-    # command turns developer mode off first. The memory/CPU flags are the
-    # container-friendly half of dev-container mode; the durability half
-    # (fsync bypass, write caching) is what is being refused.
-    entrypoint: ['/bin/bash', '-c']
-    command:
-      - >-
-        rpk redpanda config set redpanda.developer_mode false &&
-        exec rpk redpanda start
-        --smp=1
-        --memory=2G
-        --reserve-memory=0M
-        --overprovisioned
-        --check=false
-        --node-id=0
-        --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-        --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
-        --rpc-addr=redpanda:33145
-        --advertise-rpc-addr=redpanda:33145
-        --default-log-level=warn
+    environment:
+      # Generated once for this file. Not a secret; changing it on an existing
+      # volume makes the broker refuse to start.
+      CLUSTER_ID: iYib_p83Rqym_0Huq_v1xQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:19092,CONTROLLER://:9093
+      # EXTERNAL is for clients on the host and is only published on loopback.
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # One node: every internal topic must be replication factor 1.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      # Topics come from `npm run kafka:topics`, never from a client: a typo'd
+      # topic name must fail, and visitors must never cause topic creation.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      # 50 offsets partitions (the default) is 50 sets of segment and index
+      # files for five consumer groups.
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 4
+      # 16 MiB segments instead of 1 GiB. Retention deletes whole closed
+      # segments, so at 1 GiB the one-day market topic would hold up to 1 GiB
+      # before anything left disk or page cache; at 16 MiB the short-retention
+      # topics stay short and leave PostgreSQL the cache. Per-topic retention
+      # is set by `kafka:topics` (events.v1 is kept forever).
+      KAFKA_LOG_SEGMENT_BYTES: 16777216
+      # The log cleaner's dedupe map is a heap buffer (128 MiB by default, a
+      # quarter of the heap below). Only __consumer_offsets is compacted here.
+      KAFKA_LOG_CLEANER_DEDUPE_BUFFER_SIZE: 33554432
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Fixed heap: -Xms = -Xmx commits it up front, so `docker stats` shows the
+      # real footprint from the first minute and the heap never resizes.
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
     ports:
       - '127.0.0.1:19092:19092'
-      # Admin API, for `rpk` from the host.
-      - '127.0.0.1:19644:9644'
+    # Proves the broker answers a Kafka request (ApiVersions), not just that
+    # the JVM is up. The probe is a second JVM in the same container, so it
+    # gets its own small heap — the container's KAFKA_HEAP_OPTS would give it
+    # 512 MB — and runs every 30 s, not every few seconds. It still costs more
+    # than its 64 MB heap (metaspace, code cache, threads), for a second or
+    # two per run; that is counted in mem_limit below.
     healthcheck:
-      test: ['CMD-SHELL', 'rpk cluster health --exit-when-healthy -X brokers=localhost:9092']
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 10s
+      test:
+        [
+          'CMD-SHELL',
+          'KAFKA_HEAP_OPTS="-Xmx64m -Xms16m" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null',
+        ]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+      start_interval: 5s
     volumes:
-      - redpanda-data:/var/lib/redpanda/data
-      # Cluster properties for the first start (auto-create off, write caching off).
-      - ./deploy/redpanda/bootstrap.yaml:/etc/redpanda/.bootstrap.yaml:ro
+      - kafka-data:/var/lib/kafka/data
+    # 512 MB heap + roughly 150–250 MB outside it (metaspace, code cache,
+    # thread stacks, NIO buffers) + the healthcheck JVM's transient
+    # ~100–150 MB. Those two non-heap figures are estimates, not measurements
+    # — `docker stats` during a bot run is what confirms or moves them. Page
+    # cache from segment writes is charged to this cgroup too, but the kernel
+    # reclaims it before the limit bites.
+    mem_limit: 1g
+    mem_reservation: 768m
 
   # The job queue's store. BullMQ's production requirements, each of which
   # fails silently if missed:
@@ -160,21 +197,26 @@ services:
     volumes:
       - valkey-data:/data
 
-  # Optional UI for the event log. Dev only, never deployed: the v2 line is end
-  # of life and v3's licence has not been checked.
-  #   docker compose --profile console up -d redpanda-console
-  redpanda-console:
-    image: redpandadata/console:v3.15.0
+  # Optional UI for the event log: topics, message bodies and headers,
+  # consumer-group lag. Dev only, loopback only, never deployed.
+  # kafbat kafka-ui (Apache 2.0), read-only: inspecting must not be able to
+  # reset an offset or delete a topic by a mis-click.
+  #   docker compose --profile console up -d kafka-ui
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.1
+    container_name: daftar-kafka-ui
     profiles: ['console']
     depends_on:
-      redpanda:
+      kafka:
         condition: service_healthy
     environment:
-      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLUSTERS_0_NAME: daftar
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_READONLY: 'true'
     ports:
       - '127.0.0.1:18080:8080'
 
 volumes:
   db-data:
-  redpanda-data:
+  kafka-data:
   valkey-data:

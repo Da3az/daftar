@@ -30,7 +30,7 @@
     "postman:build": "node scripts/build-postman.mjs",
     "seed": "npm run -w @daftar/api seed --",
     "seed:verify": "npm run -w @daftar/api seed:verify",
-    "broker:up": "docker compose up -d redpanda valkey",
+    "broker:up": "docker compose up -d kafka valkey",
     "kafka:topics": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api kafka:topics",
     "kafka:backfill": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api kafka:backfill",
     "projections:replay": "DATABASE_URL=postgres://daftar:daftar@127.0.0.1:55432/daftar_exchange npm run -w @daftar/api projections:replay --",

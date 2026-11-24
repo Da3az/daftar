@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
     /**
-     * `test/broker/` needs Redpanda (and is run by `npm run test:broker`, which
+     * `test/broker/` needs Kafka (and is run by `npm run test:broker`, which
      * sets BROKER_TESTS=1). Excluded otherwise, so `npm test` keeps needing
      * PostgreSQL and nothing else. When included it fails loudly if the broker
      * is not there — it never skips.

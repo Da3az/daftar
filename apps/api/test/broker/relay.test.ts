@@ -14,7 +14,7 @@ import { relayOnce } from '../../src/outbox/relay.ts';
 import { allShards, reclaimStale } from '../../src/outbox/worker.ts';
 
 /**
- * The relay against a real broker. Needs Redpanda on KAFKA_BROKERS (default
+ * The relay against a real broker. Needs Kafka on KAFKA_BROKERS (default
  * 127.0.0.1:19092); `npm run test:broker`. Each run uses its own topic
  * namespace on the shared broker, as each file uses its own database.
  *

@@ -266,7 +266,7 @@ const schema = z.object({
    * Where the outbox worker publishes.
    *
    * `direct` is the original behaviour — the worker writes the activity feed
-   * itself — and stays the default so that nothing needs Redpanda running.
+   * itself — and stays the default so that nothing needs the broker running.
    * `kafka` makes the worker a relay to the event log; the feed is then one
    * consumer among several.
    */
