@@ -293,8 +293,12 @@ the reservations of open orders are still arithmetic over those orders rather
 than money moved into a hold account — only withdrawals use a hold account.
 Live updates are pushed over server-sent events when the event log is running,
 and the screen falls back to polling when it is not; there is no WebSocket.
-The event log is **one Redpanda broker with replication factor 1**: losing its
-disk loses the log, which can be rebuilt from PostgreSQL, and nothing else.
+The event log is **one Apache Kafka node with replication factor 1**: losing
+its disk loses the log, which can be rebuilt from PostgreSQL, and nothing else.
+It acknowledges writes from the page cache (Kafka's default), so a host crash
+can lose the last few seconds of events — feed rows, position updates and
+notifications, never money; see
+[`docs/infrastructure.md`](docs/infrastructure.md).
 Delivery is at-least-once everywhere and every consumer is idempotent by a
 PostgreSQL unique key; **no exactly-once is claimed**, because Kafka's
 exactly-once ends at the broker and the effects here are in PostgreSQL. Missed
@@ -306,10 +310,10 @@ branch as it stands.
 
 The PostgreSQL outbox is still where every event is born, in the same
 transaction as the money. The outbox worker is now a **relay**: it produces
-each claimed batch to Redpanda (keyed by account, idempotent producer) and
+each claimed batch to Kafka (keyed by account, idempotent producer) and
 marks the rows published only after the broker acknowledged them. With the
 broker down, orders keep committing and the outbox backs up; it drains in
-order when the broker returns. Matching never touches Redpanda or BullMQ.
+order when the broker returns. Matching never touches Kafka or BullMQ.
 
 | Consumer / job      | What it does                                                                    | Idempotent by                                       |
 | ------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -326,7 +330,7 @@ the outside world on confirmation or released back on failure. A database
 trigger enforces the legal state transitions and writes their history, and a
 settlement or release can exist at most once per withdrawal.
 
-### Why Redpanda and Valkey, when PostgreSQL can queue
+### Why Kafka and Valkey, when PostgreSQL can queue
 
 PostgreSQL already queues here — the outbox is a queue, and it stays the
 source of truth. BullMQ v6 also ships an official PostgreSQL backend, so
@@ -343,14 +347,24 @@ taken, for three reasons that are about this repository specifically:
 - **Replay is a different job from queueing.** A queue deletes what it has
   delivered. A projection that must be rebuildable from the beginning needs a
   log that keeps everything and lets each reader keep its own position. That
-  is what Redpanda is for here; the outbox reaps its rows after a day.
+  is what Kafka is for here; the outbox reaps its rows after a day.
 
-The cost is two more stateful services and roughly 3 GB of memory (see
+**Kafka, not Redpanda.** The event log started on Redpanda. The code only ever
+spoke the Kafka protocol, so swapping brokers did not change the application.
+Two things drove the swap. Redpanda's production guidance is 2 GB of RAM per
+core. Its 26.2 line, the last under BSL 1.1, reaches end of support on
+2027-07-28, and after that only Community Edition terms remain. Kafka is
+Apache 2.0 and runs here in a 1 GB cap. It gives up one thing: Redpanda
+fsyncs before it acks, and Kafka by default acks from the page cache.
+
+The cost is two more stateful services and about 1.5 GB of memory caps (see
 [`docs/infrastructure.md`](docs/infrastructure.md)). Neither is trusted for
 correctness: every guarantee is a PostgreSQL constraint, and PostgreSQL-side
 sweepers re-drive anything a lost job or message would have done.
 
-**Measured** (local dev box, not the 8 GB target; provenance in each file):
+**Measured** (local dev box, not the 8 GB target; provenance in each file).
+These runs were made **on Redpanda v26.2.7**, before the swap to Kafka, and
+have not been repeated on Kafka:
 
 | Claim                                              | Result                                                                                                                      | File                                                           |
 | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -364,13 +378,14 @@ sweepers re-drive anything a lost job or message would have done.
 Three of those runs found bugs, fixed before the numbers above were taken: the
 outbox backlog waited out its outage backoff after the broker was back; a
 scheduler tick's time was read from the wrong field, which could have
-deduplicated a real run away; and Redpanda's image ships in developer mode,
-which bypasses fsync even when `--mode dev-container` is not used.
+deduplicated a real run away; and Redpanda's image (the broker then) ships in
+developer mode, which bypasses fsync even when `--mode dev-container` is not
+used.
 
 ```bash
 npm run exchange:db:create      # a separate database: never the seeded one
 npm run exchange:db:migrate
-npm run broker:up               # Redpanda + Valkey
+npm run broker:up               # Kafka + Valkey
 npm run kafka:topics            # creates the topics; the broker never auto-creates them
 npm run dev:exchange            # API on :3000 with the bots trading and live push on
 npm run dev:workers             # relay, consumers, BullMQ workers, market ticker
