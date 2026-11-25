@@ -1,0 +1,29 @@
+-- The reconciler's index: an account's outbox events, in id order.
+--
+-- Hand-written, like 0006–0017. `outbox` is not modelled in `schema.ts`, so
+-- there is nothing for drizzle-kit to diff.
+--
+-- ## What it serves
+--
+-- The reconciler reads the truth as of the projection's `last_event_id`
+-- (`readSnapshot()` in `events/consumers/reconciler.ts`). Two queries take
+-- back out the trades the projection has not applied yet, and both look for
+-- one guest's outbox events newer than that id:
+--
+-- - the tail sum in `readSnapshot()`: `account_id = ? AND id > last_event_id`;
+-- - the `NOT EXISTS` in `positionFromTrades()`: the same, plus the trade's
+--   `transaction_id`.
+--
+-- Without this index both are a range scan of `outbox_pkey` from
+-- `last_event_id` to the end of the table, filtered by account. For a guest
+-- whose last event is old — every position re-dirtied by a full sweep — that
+-- is most of the outbox, once per position. `(account_id, id)` turns it into
+-- an index range on one account.
+--
+-- ## Plain, not CONCURRENTLY
+--
+-- The outbox holds about 24 h of rows (`reap()` deletes published rows older
+-- than that), so the build is short. The write stall is the same trade as in
+-- 0010, at a smaller size.
+
+CREATE INDEX IF NOT EXISTS outbox_account_id_idx ON outbox (account_id, id);

@@ -107,6 +107,11 @@ export const markValue = (quantity: bigint, price: bigint): bigint => notional(q
  * event for this participant is newer is left out. Trades are excluded rather
  * than included by event id because published outbox rows are reaped — an
  * old fill has no event row left, and must still count.
+ *
+ * The cash account is resolved once, as a constant, rather than by joining
+ * `participants` inside the subquery: correlated through the join, the planner
+ * hashes the subquery over every account's newer events, and
+ * `outbox_account_id_idx` (migration 0018) goes unused.
  */
 export async function positionFromTrades(
   client: pg.Pool | pg.PoolClient,
@@ -121,8 +126,8 @@ export async function positionFromTrades(
       WHERE o.participant_id = $1::bigint AND t.symbol = $2
         AND ($3::bigint IS NULL OR NOT EXISTS (
               SELECT 1 FROM outbox ev
-                JOIN participants p ON p.cash_account_id = ev.account_id
-               WHERE p.id = o.participant_id
+               WHERE ev.account_id = (SELECT p.cash_account_id FROM participants p
+                                       WHERE p.id = $1::bigint)
                  AND ev.id > $3::bigint
                  AND ev.transaction_id = t.transaction_id
                  AND ev.event_type = 'trade.' || o.side::text))
