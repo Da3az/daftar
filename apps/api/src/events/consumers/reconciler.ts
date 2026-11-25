@@ -41,6 +41,9 @@ import type { Envelope } from '../envelope.ts';
  * A full sweep every `FULL_SWEEP_EVERY` cycles re-dirties every position, so
  * a divergence introduced without any new event — a hand edit, the chaos
  * endpoint — is still found.
+ *
+ * A divergence that repeats identically is recorded once, so the number of
+ * findings counts distinct divergences, not how often one was seen.
  */
 
 const LAG_LIMIT_MS = 60_000;
@@ -143,7 +146,7 @@ async function record(pool: pg.Pool, f: Finding): Promise<boolean> {
   }
 }
 
-interface DirtyRow {
+export interface DirtyRow {
   participant_id: bigint;
   external_id: string;
   symbol: string;
@@ -208,7 +211,7 @@ async function readSnapshot(pool: pg.Pool, row: DirtyRow): Promise<Snapshot> {
 }
 
 /** Check one dirty position. Returns whether it was settled (checked or given up on). */
-async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
+export async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
   const { projected, truth, held } = await readSnapshot(pool, row);
 
   if (!projected || !truth || held === undefined) {

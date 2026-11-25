@@ -13,7 +13,7 @@ import { positionFromTrades, readPosition } from '../src/exchange/positions.ts';
 import { applyTransactional } from '../src/events/consumer.ts';
 import { applyActivity } from '../src/events/consumers/activity.ts';
 import { applyPosition } from '../src/events/consumers/positions.ts';
-import { startReconcileSweeps } from '../src/events/consumers/reconciler.ts';
+import { checkOne, startReconcileSweeps } from '../src/events/consumers/reconciler.ts';
 import { decodeEnvelope, type Envelope } from '../src/events/envelope.ts';
 import { toEnvelopeMessage } from '../src/outbox/relay.ts';
 import { claimBatch, allShards } from '../src/outbox/worker.ts';
@@ -191,5 +191,85 @@ describe('a divergence is detected, and timed', () => {
 
     expect(found.map((f) => f.kind)).toContain('cost_basis_mismatch');
     expect(found.find((f) => f.kind === 'cost_basis_mismatch')!.introduced_at).not.toBeNull();
+  });
+});
+
+describe('a trade the projection has not applied yet is not a divergence', () => {
+  /**
+   * Rule: a trade committed to the ledger whose event the projection has not
+   * applied yet is not a finding — the reconciler compares the projection with
+   * the ledger as of the projection's last event. And it still finds real
+   * drift while such a trade is in flight.
+   *
+   * The guest buys once and the projection applies that event; the guest buys
+   * again, and that trade's events stay in the outbox, unapplied.
+   */
+  async function guestWithUnappliedTrade() {
+    const created = await createGuest(ctx.pool);
+    const g = (await findParticipant(ctx.pool, created.externalId))!;
+    await order(bots[0]!, 'sell', '3.00000000', '25.00');
+    await order(bots[0]!, 'sell', '2.00000000', '25.37');
+    await order(g.externalId, 'buy', '1.00000000', '', 'market');
+    await applyTrades(await relayed());
+
+    // Committed to the ledger and the trades table; its events are not relayed.
+    await order(g.externalId, 'buy', '2.50000000', '', 'market');
+    return g;
+  }
+
+  async function applyTrades(events: Envelope[]) {
+    for (const e of events) {
+      if (e.type.startsWith('trade.'))
+        await applyTransactional(ctx.pool, 'positions', e, applyPosition);
+    }
+  }
+
+  async function checkAsOfProjection(g: { id: bigint; externalId: string }) {
+    const projected = (await readPosition(ctx.pool, g.id, DEFAULT_MARKET))!;
+    return checkOne(ctx.pool, {
+      participant_id: g.id,
+      external_id: g.externalId,
+      symbol: DEFAULT_MARKET,
+      event_id: projected.lastEventId,
+      marked_at: new Date().toISOString(),
+    });
+  }
+
+  async function positionFindings() {
+    const { rows } = await ctx.pool.query<{ kind: string }>(
+      `SELECT kind FROM reconciliation_findings
+        WHERE kind IN ('quantity_mismatch', 'cost_basis_mismatch', 'realised_mismatch')
+        ORDER BY kind`,
+    );
+    return rows.map((r) => r.kind);
+  }
+
+  it('records nothing while the event is in flight, nor once it is applied', async () => {
+    const g = await guestWithUnappliedTrade();
+
+    expect((await readPosition(ctx.pool, g.id, DEFAULT_MARKET))!.quantity).toBe(
+      parseQuantity('1.00000000'),
+    );
+    expect(await checkAsOfProjection(g)).toBe(true);
+    expect(await positionFindings()).toEqual([]);
+
+    await applyTrades(await relayed());
+    expect((await readPosition(ctx.pool, g.id, DEFAULT_MARKET))!.quantity).toBe(
+      parseQuantity('3.50000000'),
+    );
+    expect(await checkAsOfProjection(g)).toBe(true);
+    expect(await positionFindings()).toEqual([]);
+  });
+
+  it('still records a projection corrupted while the event is in flight', async () => {
+    const g = await guestWithUnappliedTrade();
+    await ctx.pool.query(
+      `UPDATE proj_positions SET quantity = quantity + 1, cost_basis = cost_basis + 7
+        WHERE participant_id = $1::bigint`,
+      [g.id.toString()],
+    );
+
+    expect(await checkAsOfProjection(g)).toBe(true);
+    expect(await positionFindings()).toEqual(['cost_basis_mismatch', 'quantity_mismatch']);
   });
 });
