@@ -9,8 +9,8 @@
  * function the HTTP order route calls — rather than over HTTP: the route is
  * rate limited to 120 orders a minute per address, and the first run of this
  * script measured the rate limiter (747 of 987 orders got 429) instead of the
- * matching path. Redpanda is stopped with `docker stop` at STOP_AT s and
- * started again at START_AT s.
+ * matching path. The Kafka broker is stopped with `docker stop` at STOP_AT s
+ * and started again at START_AT s.
  *
  * Env: DATABASE_URL (daftar_exchange),
  * GUESTS, RATE (orders/s), DURATION_S, STOP_AT, START_AT.
@@ -63,7 +63,7 @@ const place = async (participant, side) => {
 
 const t0 = Date.now();
 const samples = [];
-const docker = (verb) => execFileSync('docker', [verb, 'daftar-redpanda'], { stdio: 'ignore' });
+const docker = (verb) => execFileSync('docker', [verb, 'daftar-kafka'], { stdio: 'ignore' });
 let stopped = false;
 let started = false;
 

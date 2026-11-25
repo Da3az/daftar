@@ -102,19 +102,37 @@ export const markValue = (quantity: bigint, price: bigint): bigint => notional(q
  * Trade id order is commit order here — matching runs under one row lock per
  * market — and within one trade where a guest was on both sides the buy is
  * taken first, the order in which the engine enqueues the two events.
+ *
+ * With `appliedThrough`, the position as of that event id: a fill whose trade
+ * event for this participant is newer is left out. Trades are excluded rather
+ * than included by event id because published outbox rows are reaped — an
+ * old fill has no event row left, and must still count.
+ *
+ * The cash account is resolved once, as a constant, rather than by joining
+ * `participants` inside the subquery: correlated through the join, the planner
+ * hashes the subquery over every account's newer events, and
+ * `outbox_account_id_idx` (migration 0018) goes unused.
  */
 export async function positionFromTrades(
   client: pg.Pool | pg.PoolClient,
   participantId: bigint,
   symbol: string,
+  appliedThrough: bigint | null = null,
 ): Promise<PositionState> {
   const { rows } = await client.query<{ side: 'buy' | 'sell'; quantity: bigint; notional: bigint }>(
     `SELECT o.side, t.quantity, t.notional
        FROM trades t
        JOIN book_orders o ON o.id IN (t.taker_order_id, t.maker_order_id)
       WHERE o.participant_id = $1::bigint AND t.symbol = $2
+        AND ($3::bigint IS NULL OR NOT EXISTS (
+              SELECT 1 FROM outbox ev
+               WHERE ev.account_id = (SELECT p.cash_account_id FROM participants p
+                                       WHERE p.id = $1::bigint)
+                 AND ev.id > $3::bigint
+                 AND ev.transaction_id = t.transaction_id
+                 AND ev.event_type = 'trade.' || o.side::text))
       ORDER BY t.id, (o.side = 'sell')`,
-    [participantId.toString(), symbol],
+    [participantId.toString(), symbol, appliedThrough?.toString() ?? null],
   );
 
   let state = EMPTY_POSITION;

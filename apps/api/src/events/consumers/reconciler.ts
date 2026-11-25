@@ -2,7 +2,12 @@ import { z } from 'zod';
 import type pg from 'pg';
 import type { Logger } from 'pino';
 import { positionAccountExternalId } from '../../exchange/engine.ts';
-import { positionFromTrades, readPosition } from '../../exchange/positions.ts';
+import {
+  positionFromTrades,
+  readPosition,
+  type PositionState,
+  type StoredPosition,
+} from '../../exchange/positions.ts';
 import { reconcileFindings } from '../../observability/metrics.ts';
 import type { Envelope } from '../envelope.ts';
 
@@ -28,9 +33,17 @@ import type { Envelope } from '../envelope.ts';
  *   `trades` is written in the same transaction as the entries, so it is the
  *   ledger's record of what was paid.
  *
+ * Both are read as of the projection's `last_event_id`, in one snapshot with
+ * the projection: caught up to the dirtying event is not caught up to the
+ * ledger, and a trade committed while its event is still on its way through
+ * the outbox and the log would otherwise read as a divergence.
+ *
  * A full sweep every `FULL_SWEEP_EVERY` cycles re-dirties every position, so
  * a divergence introduced without any new event — a hand edit, the chaos
  * endpoint — is still found.
+ *
+ * A divergence that repeats identically is recorded once, so the number of
+ * findings counts distinct divergences, not how often one was seen.
  */
 
 const LAG_LIMIT_MS = 60_000;
@@ -133,7 +146,7 @@ async function record(pool: pg.Pool, f: Finding): Promise<boolean> {
   }
 }
 
-interface DirtyRow {
+export interface DirtyRow {
   participant_id: bigint;
   external_id: string;
   symbol: string;
@@ -141,11 +154,67 @@ interface DirtyRow {
   marked_at: string;
 }
 
-/** Check one dirty position. Returns whether it was settled (checked or given up on). */
-async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
-  const projected = await readPosition(pool, row.participant_id, row.symbol);
+interface Snapshot {
+  projected: StoredPosition | null;
+  truth?: PositionState;
+  held?: bigint;
+}
 
-  if (!projected || projected.lastEventId < row.event_id) {
+/**
+ * Read the projection and both sources of truth in one snapshot, with the
+ * truth taken as of the projection's `last_event_id`. Trading does not stop
+ * while the reconciler looks: a trade committed to the ledger whose event the
+ * projection has not applied yet is not a divergence, so it is taken back out
+ * — of `trades` by `positionFromTrades`, of the account balance here.
+ */
+async function readSnapshot(pool: pg.Pool, row: DirtyRow): Promise<Snapshot> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const projected = await readPosition(client, row.participant_id, row.symbol);
+    if (!projected || projected.lastEventId < row.event_id) {
+      await client.query('COMMIT');
+      return { projected };
+    }
+
+    const truth = await positionFromTrades(
+      client,
+      row.participant_id,
+      row.symbol,
+      projected.lastEventId,
+    );
+
+    const { rows: balances } = await client.query<{ balance: bigint }>(
+      'SELECT balance FROM accounts WHERE external_id = $1',
+      [positionAccountExternalId(row.external_id, row.symbol)],
+    );
+    const { rows: tail } = await client.query<{ unapplied: bigint }>(
+      `SELECT coalesce(sum(CASE WHEN ev.event_type = 'trade.buy'
+                                THEN t.quantity ELSE -t.quantity END), 0)::bigint AS unapplied
+         FROM outbox ev
+         JOIN participants p ON p.cash_account_id = ev.account_id
+         JOIN trades t ON t.transaction_id = ev.transaction_id
+        WHERE p.id = $1::bigint AND t.symbol = $2 AND ev.id > $3::bigint
+          AND ev.event_type IN ('trade.buy', 'trade.sell')`,
+      [row.participant_id.toString(), row.symbol, projected.lastEventId.toString()],
+    );
+    await client.query('COMMIT');
+
+    const held = (balances[0]?.balance ?? 0n) - (tail[0]?.unapplied ?? 0n);
+    return { projected, truth, held };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Check one dirty position. Returns whether it was settled (checked or given up on). */
+export async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
+  const { projected, truth, held } = await readSnapshot(pool, row);
+
+  if (!projected || !truth || held === undefined) {
     const waitedMs = Date.now() - Date.parse(row.marked_at);
     if (waitedMs < LAG_LIMIT_MS) return false; // not caught up yet; look again next sweep
     await record(pool, {
@@ -159,14 +228,6 @@ async function checkOne(pool: pg.Pool, row: DirtyRow): Promise<boolean> {
     });
     return false;
   }
-
-  const truth = await positionFromTrades(pool, row.participant_id, row.symbol);
-
-  const { rows: balances } = await pool.query<{ balance: bigint }>(
-    'SELECT balance FROM accounts WHERE external_id = $1',
-    [positionAccountExternalId(row.external_id, row.symbol)],
-  );
-  const held = balances[0]?.balance ?? 0n;
 
   const checks: [string, bigint, bigint][] = [
     ['quantity_mismatch', held, projected.quantity],

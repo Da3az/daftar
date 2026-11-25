@@ -178,7 +178,7 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       # The unauthenticated legacy API. Off in production unless asked for.
       LEGACY_API_ENABLED: ${LEGACY_API_ENABLED:-false}
-      KAFKA_BROKERS: redpanda:9092
+      KAFKA_BROKERS: kafka:9092
       # Tracing off, as it is everywhere. The SDK is the component most likely
       # to leak memory here and there is no collector on this box to send to.
       OTEL_ENABLED: 'false'
@@ -222,7 +222,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redpanda:
+      kafka:
         condition: service_healthy
       valkey:
         condition: service_healthy
@@ -236,7 +236,7 @@ services:
       DATABASE_URL: postgres://daftar:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/${DAFTAR_DB_NAME:-daftar}
       WORKERS_DB_POOL_MAX: '8'
       LOG_LEVEL: info
-      KAFKA_BROKERS: redpanda:9092
+      KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://valkey:6379
       WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:?WEBHOOK_SIGNING_SECRET is required}
       CHAOS_TOKEN_SECRET: ${CHAOS_TOKEN_SECRET:?CHAOS_TOKEN_SECRET is required}
@@ -251,50 +251,58 @@ services:
     mem_limit: 384m
     mem_reservation: 192m
 
-  # Production mode, not dev-container: fsync on, write caching off. See
-  # compose.yaml for why each flag is there. v26.2.x for the licence reason
-  # recorded there.
-  redpanda:
-    image: redpandadata/redpanda:v26.2.7
+  # The event log: Apache Kafka, one combined broker + KRaft controller. See
+  # compose.yaml for why each setting is there; this differs only in having no
+  # host-facing listener. Default flushing (acked from the page cache) — the
+  # trade is written down in docs/infrastructure.md, "Event log durability".
+  kafka:
+    image: apache/kafka:4.2.2
+    hostname: kafka
     restart: unless-stopped
-    # The image's own /etc/redpanda/redpanda.yaml ships `developer_mode: true`,
-    # and in developer mode rpk adds `--unsafe-bypass-fsync` by itself — found
-    # on the first start of this file, in the broker's own log. So the start
-    # command turns developer mode off first. The memory/CPU flags are the
-    # container-friendly half of dev-container mode; the durability half
-    # (fsync bypass, write caching) is what is being refused.
-    entrypoint: ['/bin/bash', '-c']
-    command:
-      - >-
-        rpk redpanda config set redpanda.developer_mode false &&
-        exec rpk redpanda start
-        --smp=1
-        --memory=2G
-        --reserve-memory=0M
-        --overprovisioned
-        --check=false
-        --node-id=0
-        --kafka-addr=internal://0.0.0.0:9092
-        --advertise-kafka-addr=internal://redpanda:9092
-        --rpc-addr=redpanda:33145
-        --advertise-rpc-addr=redpanda:33145
-        --default-log-level=warn
+    environment:
+      # Not a secret. Changing it on an existing volume stops the broker.
+      CLUSTER_ID: iYib_p83Rqym_0Huq_v1xQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 4
+      KAFKA_LOG_SEGMENT_BYTES: 16777216
+      KAFKA_LOG_CLEANER_DEDUPE_BUFFER_SIZE: 33554432
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
     expose:
       - '9092'
     healthcheck:
-      test: ['CMD-SHELL', 'rpk cluster health --exit-when-healthy -X brokers=localhost:9092']
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
+      test:
+        [
+          'CMD-SHELL',
+          'KAFKA_HEAP_OPTS="-Xmx64m -Xms16m" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null',
+        ]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+      start_interval: 5s
     volumes:
-      - redpanda-data:/var/lib/redpanda/data
-      # Cluster properties for the first start (auto-create off, write caching off).
-      - ./deploy/redpanda/bootstrap.yaml:/etc/redpanda/.bootstrap.yaml:ro
-    # --memory=2G is Seastar's own allocation; the cap leaves headroom for
-    # the process outside it.
-    mem_limit: 2560m
-    mem_reservation: 2048m
+      - kafka-data:/var/lib/kafka/data
+    # 512 MB fixed heap + an estimated 150–250 MB outside it + the healthcheck
+    # JVM's transient ~100–150 MB. Estimates until measured with
+    # `docker stats`; box sizing is redone from that measurement.
+    mem_limit: 1g
+    mem_reservation: 768m
 
   valkey:
     image: valkey/valkey:9.2.0-alpine
@@ -364,5 +372,5 @@ volumes:
   wal-archive:
   caddy-data:
   caddy-config:
-  redpanda-data:
+  kafka-data:
   valkey-data:
