@@ -130,8 +130,10 @@ services:
       # quarter of the heap below). Only __consumer_offsets is compacted here.
       KAFKA_LOG_CLEANER_DEDUPE_BUFFER_SIZE: 33554432
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      # Fixed heap: -Xms = -Xmx commits it up front, so `docker stats` shows the
-      # real footprint from the first minute and the heap never resizes.
+      # Fixed heap: -Xms = -Xmx, so the heap never resizes. Committed is not
+      # resident: Linux backs heap pages only once they are touched, so
+      # `docker stats` starts well below 512 MB and climbs as the heap fills
+      # (measured 2026-11-25: ~350 MiB after a few minutes of light load).
       KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
       KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
     ports:
