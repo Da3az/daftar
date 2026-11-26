@@ -7,6 +7,7 @@ import { useTestDatabase } from './support/test-database.ts';
 import { resetLedger } from './support/reset.ts';
 import { DEFAULT_MARKET, placeBookOrder } from '../src/exchange/engine.ts';
 import { FUNDING_EXTERNAL_ID, contributionsOf, transfer, withdraw } from '../src/exchange/cash.ts';
+import { markSubmitted, settle } from '../src/exchange/withdrawals.ts';
 import {
   GUEST_STARTING_CASH,
   createGuest,
@@ -29,6 +30,14 @@ import { allShards, drainOnce } from '../src/outbox/worker.ts';
 const ctx = useTestDatabase({ poolMax: 15 });
 
 let app: App;
+
+// What the rail does for a withdrawal it accepts: submitted, then confirmed
+// (settle posts the payout). Used where a test needs a withdrawal paid out.
+async function payOut(withdrawalId: string): Promise<void> {
+  const id = BigInt(withdrawalId);
+  expect(await markSubmitted(ctx.pool, id)).not.toBeNull();
+  expect(await settle(ctx.pool, id)).toBe('done');
+}
 let bots: string[] = [];
 
 beforeAll(async () => {
@@ -800,7 +809,13 @@ describe('the receipt contract', () => {
       app.inject({ method: 'POST', url, headers: { cookie }, payload });
 
     await post('/v1/exchange/deposits', a.cookie, { amount: '250.00' });
-    await post('/v1/exchange/withdrawals', a.cookie, { clientId: nextId(), amount: '100.00' });
+    // Since the withdrawal saga (0f603a7) a withdrawal counts once it is PAID
+    // OUT, not when requested: drive it hold -> submitted -> confirmed, as the
+    // rail would, before reading the parts.
+    const held = (
+      await post('/v1/exchange/withdrawals', a.cookie, { clientId: nextId(), amount: '100.00' })
+    ).json<{ withdrawalId: string }>();
+    await payOut(held.withdrawalId);
     await post('/v1/exchange/transfers', b.cookie, {
       clientId: nextId(),
       amount: '30.00',
@@ -857,7 +872,11 @@ describe('the receipt contract', () => {
     const deposit = (await post('/v1/exchange/deposits', a.cookie, { amount: '40.00' })).json<{
       depositId: string;
     }>();
-    await post('/v1/exchange/withdrawals', a.cookie, { clientId: withdrawalId, amount: '7.00' });
+    // Paid out through the saga, so its ledger event is `withdrawal.confirmed`.
+    const held = (
+      await post('/v1/exchange/withdrawals', a.cookie, { clientId: withdrawalId, amount: '7.00' })
+    ).json<{ withdrawalId: string }>();
+    await payOut(held.withdrawalId);
     await post('/v1/exchange/transfers', a.cookie, {
       clientId: transferId,
       amount: '3.00',
@@ -883,7 +902,7 @@ describe('the receipt contract', () => {
     expect(byType.get('trade.buy')!.reference).toBe(orderId);
     expect(byType.get('trade.buy')!.counterparty).toBe(await nameOf(bots[0]!));
     expect(byType.get('deposit.credited')!.reference).toBe(deposit.depositId);
-    expect(byType.get('withdrawal.completed')!.reference).toBe(withdrawalId);
+    expect(byType.get('withdrawal.confirmed')!.reference).toBe(withdrawalId);
     expect(byType.get('transfer.sent')!.reference).toBe(transferId);
 
     // A buy takes cash out of the buyer's account: a debit, as the screen says.
@@ -905,7 +924,7 @@ describe('the receipt contract', () => {
       amount: '40.00',
       unit: 'USD',
     });
-    expect(byType.get('withdrawal.completed')!.entries).toContainEqual({
+    expect(byType.get('withdrawal.confirmed')!.entries).toContainEqual({
       account: 'Outside world',
       direction: 'credit',
       amount: '7.00',
