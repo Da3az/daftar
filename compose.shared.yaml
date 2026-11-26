@@ -1,0 +1,103 @@
+# daftar on the SHARED platform box (~/ovh-infra, README "Tenancy model").
+#
+# Differs from compose.prod.yaml (standalone/benchmark): no own postgres, kafka,
+# valkey or public Caddy. It joins the external `platform` network and uses
+# postgres:5432 (database `daftar`, CONNECTION LIMIT 36), valkey:6379 and
+# kafka:9092. Ingress is daftar's own Cloudflare Tunnel → web:80.
+#
+# Deployed by .github/workflows/deploy.yml via the box's deploy-gate:
+#   images daftar-api:$TAG and daftar-web:$TAG are `docker load`ed, then
+#   `docker compose -f compose.shared.yaml --env-file /srv/daftar/.env up -d`.
+# /srv/daftar/.env (mode 600, on the box only) holds TAG and the secrets.
+
+name: daftar
+
+networks:
+  platform:
+    external: true
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://daftar:${DB_PASSWORD:?}@postgres:5432/daftar
+  KAFKA_BROKERS: kafka:9092
+  REDIS_URL: redis://valkey:6379
+  LOG_LEVEL: info
+  LOG_PRETTY: 'false'
+  OTEL_ENABLED: 'false'
+  WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:?}
+  CHAOS_TOKEN_SECRET: ${CHAOS_TOKEN_SECRET:?}
+  GUEST_SESSION_SECRET: ${GUEST_SESSION_SECRET:?}
+
+services:
+  api:
+    image: daftar-api:${TAG:?}
+    restart: unless-stopped
+    networks: [default, platform]
+    environment:
+      <<: *api-env
+      HOST: 0.0.0.0
+      PORT: '3000'
+      # Shared-platform connection budget: 12 per API instance (×2 during a
+      # start-first deploy) + workers 8 + one-shots ≤ 36 (database limit).
+      DB_POOL_MAX: '12'
+      LEDGER_CONCURRENCY_MODE: advisory
+      ALLOW_FLAG_HEADERS: 'false'
+      DAFTAR_NAIVE_OVERDRAFT: 'false'
+      DAFTAR_NAIVE_LOST_UPDATE: 'false'
+      DAFTAR_NAIVE_IDEMPOTENCY: 'false'
+      EXCHANGE_BOTS_ENABLED: 'true'
+      OUTBOX_WORKER_ENABLED: 'true'
+      LIVE_PUSH_ENABLED: 'true'
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?}
+      # The unauthenticated legacy API stays off in production.
+      LEGACY_API_ENABLED: 'false'
+      CORS_ORIGINS: ''
+    mem_limit: 512m
+    mem_reservation: 256m
+
+  workers:
+    image: daftar-api:${TAG:?}
+    restart: unless-stopped
+    networks: [default, platform]
+    command: ['node', '--max-old-space-size=256', '--max-semi-space-size=16', 'apps/api/dist/workers.js']
+    healthcheck:
+      disable: true
+    environment:
+      <<: *api-env
+      WORKERS_DB_POOL_MAX: '8'
+      OUTBOX_WORKER_ENABLED: 'true'
+      OUTBOX_PUBLISHER: kafka
+      CONSUMERS_ENABLED: 'true'
+      JOBS_ENABLED: 'true'
+      MARKET_TICKER_ENABLED: 'true'
+    mem_limit: 384m
+    mem_reservation: 192m
+
+  # One-shot, run by the deploy gate before `up`: migrations, then topics.
+  migrate:
+    image: daftar-api:${TAG:?}
+    profiles: ['ops']
+    networks: [platform]
+    command: ['sh', '-c', 'node apps/api/dist/db/migrate.js && node apps/api/dist/events/cli/topics.js']
+    healthcheck:
+      disable: true
+    environment:
+      <<: *api-env
+    restart: 'no'
+
+  web:
+    image: daftar-web:${TAG:?}
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      GOMEMLIMIT: 100MiB
+    mem_limit: 128m
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', 'run']
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?}
+    depends_on: [web]
+    mem_limit: 64m

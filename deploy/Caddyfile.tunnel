@@ -1,0 +1,44 @@
+# Caddy behind a Cloudflare Tunnel on the shared box (compose.shared.yaml).
+# TLS ends at Cloudflare; cloudflared reaches this over the compose network,
+# so Caddy listens on plain :80 and never asks for a certificate.
+{
+	auto_https off
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+		client_ip_headers Cf-Connecting-Ip X-Forwarded-For
+	}
+}
+
+:80 {
+	log {
+		output stdout
+		format json
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.binance.com wss://stream.binance.com:9443; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+	@api path /v1/* /health/* /docs /docs/*
+	handle @api {
+		reverse_proxy api:3000 {
+			# Live push is a long-lived EventSource: never buffer it.
+			flush_interval -1
+		}
+	}
+	# /metrics is never public.
+	respond /metrics 404
+	handle {
+		root * /srv/web
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

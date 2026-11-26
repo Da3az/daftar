@@ -1,0 +1,63 @@
+# Deploy to the shared platform box on every push to master.
+#
+#   CI (ci.yml) -> build daftar-api + daftar-web images -> ssh deploy@box
+#
+# The SSH key can only run the box's deploy-gate for `daftar` (forced command
+# in authorized_keys): `compose`, `load`, `deploy <sha>`, `rollback`. No shell.
+# App secrets never leave the box (/srv/daftar/.env). See ~/ovh-infra README.
+#
+# Secrets: DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_KNOWN_HOSTS (box host key, pinned).
+name: deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: SSH setup (pinned host key)
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host box
+            HostName ${{ secrets.DEPLOY_HOST }}
+            User deploy
+            IdentityFile ~/.ssh/deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          CFG
+
+      - name: Build images
+        run: |
+          docker build -t daftar-api:${{ github.sha }} -f Dockerfile .
+          docker build -t daftar-web:${{ github.sha }} -f Dockerfile.web .
+
+      - name: Upload compose file
+        run: ssh box compose < compose.shared.yaml
+
+      - name: Load images on the box
+        run: docker save daftar-api:${{ github.sha }} daftar-web:${{ github.sha }} | ssh box load
+
+      - name: Migrate and deploy
+        run: ssh box deploy ${{ github.sha }}

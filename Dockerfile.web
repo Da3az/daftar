@@ -1,0 +1,20 @@
+# The SPA, served by Caddy on the shared box behind daftar's Cloudflare Tunnel.
+# Same origin as the API: the app calls relative /v1/... with cookies and an
+# EventSource, which a separate Pages origin would break. Cloudflare still
+# caches /assets/* at the edge (proxied hostname, immutable headers below).
+FROM node:26.13.1-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/money/package.json ./packages/money/
+RUN npm ci --include=dev --ignore-scripts
+COPY tsconfig.base.json ./
+COPY packages/money ./packages/money
+COPY apps/web ./apps/web
+RUN npm run build --workspace @daftar/money \
+ && npm run build --workspace @daftar/web
+
+FROM caddy:2.11-alpine
+COPY deploy/Caddyfile.tunnel /etc/caddy/Caddyfile
+COPY --from=build /app/apps/web/dist /srv/web

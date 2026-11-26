@@ -1,11 +1,13 @@
 name: CI
 
 on:
+  # Pushes to master are covered by deploy.yml, which calls this workflow.
   push:
-    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+  # deploy.yml runs this first and deploys only if it passes.
+  workflow_call:
 
 # A second push to the same branch cancels the first. CI minutes spent finishing
 # a run whose result nobody will read are wasted.
