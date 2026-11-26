@@ -14,7 +14,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import converter from 'openapi-to-postmanv2';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const openapiPath = resolve(repoRoot, 'apps/api/openapi.json');
@@ -22,6 +21,20 @@ const collectionPath = resolve(repoRoot, 'postman/daftar.postman_collection.json
 const environmentPath = resolve(repoRoot, 'postman/daftar.local.postman_environment.json');
 
 const spec = await readFile(openapiPath, 'utf8');
+
+// The converter fakes request bodies and parameters with Math.random (enum
+// picks, sample values), so two runs over the same openapi.json differed and
+// CI's "is the committed contract stale?" diff failed on every run. Seed
+// Math.random BEFORE loading the converter — its faker keeps a reference
+// taken at import time, which is why this is a dynamic import.
+let seed = 0x5eed;
+Math.random = () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const { default: converter } = await import('openapi-to-postmanv2');
 
 const result = await new Promise((resolvePromise, reject) => {
   converter.convert(
@@ -82,6 +95,28 @@ function rewriteHost(node) {
 }
 
 rewriteHost(result);
+
+/**
+ * Make the output deterministic. The converter stamps a fresh random UUID on
+ * every item and response, and fills generated response examples with random
+ * values (e.g. `uptimeSeconds`), so two runs over the same openapi.json never
+ * match and CI's "is the committed contract stale?" diff failed on every run.
+ * Response examples are not wanted anyway (see the converter options above),
+ * and Postman assigns ids itself on import.
+ */
+function stripNondeterminism(node) {
+  if (Array.isArray(node)) {
+    node.forEach(stripNondeterminism);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+  delete node.id;
+  delete node._postman_id;
+  if (Array.isArray(node.response)) node.response = [];
+  for (const value of Object.values(node)) stripNondeterminism(value);
+}
+
+stripNondeterminism(result);
 
 result.variable = [
   {
