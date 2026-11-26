@@ -59,7 +59,8 @@ services:
     image: daftar-api:${TAG:?}
     restart: unless-stopped
     networks: [default, platform]
-    command: ['node', '--max-old-space-size=256', '--max-semi-space-size=16', 'apps/api/dist/workers.js']
+    command:
+      ['node', '--max-old-space-size=256', '--max-semi-space-size=16', 'apps/api/dist/workers.js']
     healthcheck:
       disable: true
     environment:
@@ -78,7 +79,8 @@ services:
     image: daftar-api:${TAG:?}
     profiles: ['ops']
     networks: [platform]
-    command: ['sh', '-c', 'node apps/api/dist/db/migrate.js && node apps/api/dist/events/cli/topics.js']
+    command:
+      ['sh', '-c', 'node apps/api/dist/db/migrate.js && node apps/api/dist/events/cli/topics.js']
     healthcheck:
       disable: true
     environment:
