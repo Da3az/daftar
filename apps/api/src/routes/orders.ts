@@ -52,7 +52,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
         '**The price is frozen at order time** from the `instruments` table and',
         'never re-read. This endpoint makes no network call of any kind: no',
         'price feed, no third-party API, no DNS. That is what makes the',
-        'benchmark numbers in docs/evidence/ reproducible, and what makes the',
+        'benchmark numbers reproducible, and what makes the',
         'amount quoted the amount charged.',
         '',
         'The concurrency strategy is chosen per request via',

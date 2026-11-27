@@ -275,7 +275,7 @@ export const entries = pgTable(
 
     /**
      * Signed, in minor units. Negative for a debit, positive for a credit.
-     * `bigint` — never numeric, never a float. See CONVENTIONS.md.
+     * `bigint` — never numeric, never a float.
      */
     amount: bigint('amount', { mode: 'bigint' }).notNull(),
 

@@ -323,7 +323,7 @@ const schema = z.object({
    */
   LIVE_PUSH_ENABLED: boolish.default(false),
 
-  /** Size of the worker process's own pool — see docs/infrastructure.md. */
+  /** Size of the worker process's own pool. */
   WORKERS_DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(8),
 
   /** Loopback port for the worker process's `/metrics`. 0 disables it. */

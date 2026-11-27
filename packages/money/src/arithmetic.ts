@@ -63,8 +63,8 @@ const QUANTITY_DIVISOR = 10n ** BigInt(QUANTITY_SCALE);
  * one *whole* asset unit. The result is cash minor units, rounded per `divRound`.
  *
  * This function makes **no network call** and reads no clock. The price is passed
- * in because it was frozen into the order at order time — see CONVENTIONS.md.
- * That is what keeps the evidence files reproducible: a live lookup here would
+ * in because it was frozen into the order at order time.
+ * That is what keeps the benchmarks reproducible: a live lookup here would
  * make every benchmark run produce different amounts.
  */
 export function notional(quantity: Quantity, price: PriceMinor): CashMinor {

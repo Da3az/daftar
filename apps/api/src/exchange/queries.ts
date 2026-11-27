@@ -18,7 +18,7 @@ import {
  * transaction stale is still a book that existed.
  *
  * Every aggregate over an amount casts back to `bigint` in SQL — `sum(bigint)`
- * is `numeric`, which the driver hands over as a string. See CONVENTIONS.md.
+ * is `numeric`, which the driver hands over as a string.
  */
 
 export async function getMarket(pool: pg.Pool, symbol: string): Promise<Market | null> {

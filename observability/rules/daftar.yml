@@ -2,7 +2,7 @@
 #
 # Every threshold below has a reason next to it. "What I would alert on" is a
 # much weaker artefact than a rule that has been loaded by Prometheus and seen
-# to fire — see docs/alerting.md for one that did.
+# to fire.
 #
 # Three things deliberately absent:
 #
@@ -46,8 +46,7 @@ groups:
             The SLO is 200ms at 50 concurrent users spread over at least 1000
             accounts — check the account spread before concluding this is a
             regression, because the same build does 186 orders/s on one account
-            and 1455 on a thousand (docs/evidence/03-concurrency-tradeoff.md).
-          runbook: docs/alerting.md#orderlatencyslobreach
+            and 1455 on a thousand.
 
   - name: daftar-ledger
     interval: 15s
@@ -76,7 +75,6 @@ groups:
             should be impossible by construction. A 40P01 means a write path
             exists that does not sort its locks. This is a code bug, not a load
             problem — do not tune anything, find the path.
-          runbook: docs/alerting.md#ledgerdeadlocksdetected
 
       # `for: 0m` and a 10-minute window: one deadlock is worth knowing about
       # immediately, because the claim it falsifies is structural.
@@ -98,7 +96,6 @@ groups:
             most likely traffic collapsing onto a few accounts. Phase 3's
             1-account profile produced exactly this. Check the account spread
             and consider `advisory`, which ships as the default for this reason.
-          runbook: docs/alerting.md#ledgerretrystorm
 
   - name: daftar-outbox
     interval: 15s
@@ -127,7 +124,6 @@ groups:
             `SELECT * FROM outbox_shard_depth` to see whether it is one shard or
             all of them. One shard means a poison message; all of them means the
             worker.
-          runbook: docs/alerting.md#outboxlaghigh
 
       # Dead-lettered events need a human by definition — they are never retried
       # automatically. Any non-zero count is actionable.
@@ -142,7 +138,6 @@ groups:
             These are never retried automatically and will stay until dealt
             with. `SELECT id, event_type, attempts, last_error FROM outbox
             WHERE state = 'dead'`.
-          runbook: docs/alerting.md#outboxdeadletters
 
       # A claim held for a long time means the worker that took it died.
       - alert: OutboxStaleClaims
@@ -156,7 +151,6 @@ groups:
             {{ $value }} row(s) claimed over 5 minutes ago. Per-account ordering
             means the next event for those accounts cannot overtake a stuck one,
             so the shard is blocked until `reclaimStale()` runs.
-          runbook: docs/alerting.md#outboxstaleclaims
 
   - name: daftar-runtime
     interval: 15s
@@ -187,7 +181,6 @@ groups:
             instrumentation leak appears and is invisible if you only watch the
             heap. If it is `external`, suspect the tracing SDK first — that is
             why `instrumentation-fs` is not installed.
-          runbook: docs/alerting.md#memorygrowthsustained
 
       # Event-loop delay distinguishes "the database is slow" from "Node is
       # blocked". Those have nothing in common as fixes, and latency alone
@@ -204,7 +197,6 @@ groups:
             doing synchronous work on the request path — this is NOT a database
             problem, and tuning PostgreSQL will not help. Look for synchronous
             JSON, crypto, or a large array operation in a handler.
-          runbook: docs/alerting.md#eventloopblocked
 
       # Pool saturation. `waiting > 0` sustained means requests are queueing for
       # a connection, which presents as latency and is actually capacity.
@@ -218,10 +210,8 @@ groups:
           description: >-
             {{ $value }} request(s) waiting for a pool slot. Raising
             DB_POOL_MAX is only correct if PostgreSQL has headroom — see the
-            connection-pool arithmetic in
-            docs/evidence/06-query-performance.md, where the benchmark
-            configuration already uses 68 of 97 usable connections.
-          runbook: docs/alerting.md#databasepoolsaturated
+            connection-pool arithmetic: the benchmark configuration already
+            uses 68 of 97 usable connections.
 
   - name: daftar-meta
     interval: 15s
@@ -242,7 +232,6 @@ groups:
             Either the service is down or the metrics endpoint is broken. Note
             that while this fires, every other alert in this file is blind — an
             absent series cannot breach a threshold.
-          runbook: docs/alerting.md#targetdown
 
       # Disk, because every retention policy is a promise about disk and this is
       # what catches the promise being wrong.
@@ -257,7 +246,6 @@ groups:
           summary: 'Prometheus TSDB is near its retention size limit'
           description: >-
             Blocks occupy over 85% of the configured retention budget.
-            Retention is 15 days / 2 GB (see docs/alerting.md). Either
+            Retention is 15 days / 2 GB. Either
             cardinality has grown or the budget needs revisiting — check for a
             new metric label before raising the limit.
-          runbook: docs/alerting.md#prometheusdisklow

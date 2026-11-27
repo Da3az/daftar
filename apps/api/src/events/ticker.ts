@@ -18,7 +18,6 @@ import type { StringProducer } from './kafka.ts';
  *
  * With N viewers polling once a second the database answers N snapshot
  * queries a second; with the ticker it answers 1 / interval, independent of N.
- * That difference is what `docs/evidence/13-live-push.md` measures.
  */
 
 export const TICKER_DEPTH = 15;

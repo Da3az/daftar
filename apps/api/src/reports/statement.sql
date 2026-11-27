@@ -1,7 +1,7 @@
 -- The account statement with a running balance.
 --
--- Phase 6's slow query. Kept as a file so the EXPLAIN in
--- docs/evidence/06-query-performance.md is reproducible verbatim.
+-- Phase 6's slow query. Kept as a file so its EXPLAIN is reproducible
+-- verbatim.
 --
 -- ## ORDER BY (created_at, id), never created_at alone
 --

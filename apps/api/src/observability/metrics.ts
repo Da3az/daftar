@@ -33,8 +33,7 @@ registry.setDefaultLabels({ service: 'daftar-api' });
 /**
  * Node's own metrics: heap, GC, handles, and `process_resident_memory_bytes`.
  *
- * The RSS series is the one that matters most here and is called out in
- * `docs/alerting.md`: the alert is on its **slope over days**, not on an
+ * The RSS series is the one that matters most here: the alert is on its **slope over days**, not on an
  * absolute value, because a tracing library that leaks a few megabytes an hour
  * never crosses a sensible threshold until it suddenly does.
  */

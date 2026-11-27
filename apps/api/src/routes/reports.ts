@@ -28,7 +28,7 @@ const UNIT_USD = 'USD';
 /**
  * Format a minor-unit bigint using the scale its unit actually has.
  *
- * `USD` is the single cash unit (see CONVENTIONS.md — single currency, no FX).
+ * `USD` is the single cash unit (single currency, no FX).
  * Everything else is an asset quantity at 8 decimal places.
  */
 function formatByUnit(amount: bigint, unit: string): string {
@@ -161,8 +161,7 @@ export const reportRoutes: FastifyPluginAsyncZod = async (app) => {
         'statement with one `now()`. Two readers would then disagree about what',
         'the balance was at a given row. `id` makes the order total.',
         '',
-        'This is the query Phase 6 indexed; see',
-        'docs/evidence/06-query-performance.md for the before/after plans.',
+        'This is the query Phase 6 indexed.',
       ].join('\n'),
       params: z.object({ externalId: ExternalId }),
       querystring: z.object({ limit: PageLimit }),

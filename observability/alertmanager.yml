@@ -67,7 +67,7 @@ receivers:
   #
   # This exists so the alerting path is demonstrable end-to-end rather than
   # asserted: rule fires in Prometheus -> alert reaches Alertmanager -> grouped
-  # -> delivered -> printed. docs/alerting.md captures all four.
+  # -> delivered -> printed.
   #
   # It is not a stand-in for a real integration, and the absence of one is
   # recorded honestly: Slack and PagerDuty need an account and a credential

@@ -216,8 +216,8 @@ export function teardown(data) {
   console.log('');
   console.log('Counts come from the k6 summary below (debits_applied /');
   console.log('debits_refused / debits_failed). The lost-update count is');
-  console.log('computed against them in docs/evidence/01-naive-break.md,');
-  console.log("because teardown cannot read this run's counters.");
+  console.log('computed against them by hand, because teardown cannot read');
+  console.log("this run's counters.");
 }
 
 /**

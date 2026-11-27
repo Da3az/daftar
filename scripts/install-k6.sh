@@ -2,9 +2,8 @@
 #
 # Install a pinned k6 into ./.tools/bin, with checksum verification.
 #
-# Pinned rather than "latest" because k6 is a measuring instrument: every
-# evidence file in docs/evidence/ records the k6 version it was produced with,
-# and a floating version would make those numbers incomparable across runs.
+# Pinned rather than "latest" because k6 is a measuring instrument: a floating
+# version would make benchmark numbers incomparable across runs.
 #
 # The official tarball from GitHub releases — no AUR, no Snap, no sudo, no
 # third-party package manager. Extracts one static binary.

@@ -31,3 +31,10 @@ infra/**/.terraform.lock.hcl.bak
 
 # Static build output.
 apps/web/dist/
+
+# Only the root README.md is tracked as Markdown, and docs/ (generated evidence,
+# infrastructure notes) never goes to GitHub. ci.yml's "Tracked-file policy"
+# step fails the build if one is force-added.
+*.md
+!/README.md
+/docs/

@@ -18,7 +18,7 @@ import { demoCashExternalId, demoPositionExternalId } from './session.ts';
  *
  * That failure mode is worse than having no chaos panel: it would show the
  * ledger surviving load that never happened, and in doing so quietly discredit
- * every measured number in `docs/evidence/`. The concurrency has to be real, so
+ * every measured number in this repo. The concurrency has to be real, so
  * it is created where real concurrency is possible — in the server, against the
  * pool, with the same code path a production order takes.
  *

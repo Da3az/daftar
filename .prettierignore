@@ -9,7 +9,6 @@ apps/api/drizzle/
 apps/web/src/routeTree.gen.ts
 apps/api/openapi.json
 postman/
-docs/evidence/raw/
 package-lock.json
 
 # No parser for a dotenv file.

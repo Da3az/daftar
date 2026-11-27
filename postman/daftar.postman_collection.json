@@ -254,7 +254,7 @@
           "request": {
             "name": "Place an order. The measured write path.",
             "description": {
-              "content": "Writes four ledger entries in one transaction — two in USD, two in the\nasset — plus the order row, atomically.\n\n**The price is frozen at order time** from the `instruments` table and\nnever re-read. This endpoint makes no network call of any kind: no\nprice feed, no third-party API, no DNS. That is what makes the\nbenchmark numbers in docs/evidence/ reproducible, and what makes the\namount quoted the amount charged.\n\nThe concurrency strategy is chosen per request via\n`x-daftar-concurrency-mode`: `pessimistic`, `serializable` or\n`advisory`. All three are correct; see the trade-off table in the\nREADME. `attempts` in the response reports how many tries the write\ntook, which is non-trivial only under `serializable`.",
+              "content": "Writes four ledger entries in one transaction — two in USD, two in the\nasset — plus the order row, atomically.\n\n**The price is frozen at order time** from the `instruments` table and\nnever re-read. This endpoint makes no network call of any kind: no\nprice feed, no third-party API, no DNS. That is what makes the\nbenchmark numbers reproducible, and what makes the\namount quoted the amount charged.\n\nThe concurrency strategy is chosen per request via\n`x-daftar-concurrency-mode`: `pessimistic`, `serializable` or\n`advisory`. All three are correct; see the trade-off table in the\nREADME. `attempts` in the response reports how many tries the write\ntook, which is non-trivial only under `serializable`.",
               "type": "text/plain"
             },
             "url": {
@@ -608,7 +608,7 @@
           "request": {
             "name": "Issue a short-lived burst token and a private demo tenant.",
             "description": {
-              "content": "The token is an HMAC over its own contents — no sessions table, so\nnothing to clean up and a restart does not invalidate a token\nmid-demo. It cannot be revoked before it expires, which is an\nacceptable trade at a 15-minute lifetime for an endpoint whose worst\ncase is already capped.\n\n**Not a static key.** A key shipped in a JavaScript bundle is a public\nkey with extra steps.\n\nThe `tenant` namespaces every account the burst touches. Demo writes\nnever mix with the seeded data — a burst is *supposed* to cause\noverdrafts under a naive flag, and doing that to a measured account\nwould corrupt the dataset every benchmark in docs/evidence/ was taken\nagainst.",
+              "content": "The token is an HMAC over its own contents — no sessions table, so\nnothing to clean up and a restart does not invalidate a token\nmid-demo. It cannot be revoked before it expires, which is an\nacceptable trade at a 15-minute lifetime for an endpoint whose worst\ncase is already capped.\n\n**Not a static key.** A key shipped in a JavaScript bundle is a public\nkey with extra steps.\n\nThe `tenant` namespaces every account the burst touches. Demo writes\nnever mix with the seeded data — a burst is *supposed* to cause\noverdrafts under a naive flag, and doing that to a measured account\nwould corrupt the dataset every benchmark was taken against.",
               "type": "text/plain"
             },
             "url": {
@@ -1177,7 +1177,7 @@
           "request": {
             "name": "Account statement with a running balance. The T-account view.",
             "description": {
-              "content": "Entries for one account in `(created_at, id)` order, each with the\nbalance after it.\n\n**The ordering is load-bearing.** A running balance is a window\nfunction, and a window function’s frame is defined by its `ORDER BY`.\nOrdering by `created_at` alone leaves ties unspecified — and ties are\nguaranteed, because a four-leg order writes all four entries in one\nstatement with one `now()`. Two readers would then disagree about what\nthe balance was at a given row. `id` makes the order total.\n\nThis is the query Phase 6 indexed; see\ndocs/evidence/06-query-performance.md for the before/after plans.",
+              "content": "Entries for one account in `(created_at, id)` order, each with the\nbalance after it.\n\n**The ordering is load-bearing.** A running balance is a window\nfunction, and a window function’s frame is defined by its `ORDER BY`.\nOrdering by `created_at` alone leaves ties unspecified — and ties are\nguaranteed, because a four-leg order writes all four entries in one\nstatement with one `now()`. Two readers would then disagree about what\nthe balance was at a given row. `id` makes the order total.\n\nThis is the query Phase 6 indexed.",
               "type": "text/plain"
             },
             "url": {

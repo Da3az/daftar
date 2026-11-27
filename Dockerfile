@@ -34,7 +34,7 @@
 # Pinned to the minor, matching .node-version. `-slim` not `-alpine`: the
 # project's own PostgreSQL work is unaffected either way, but musl's allocator
 # behaves differently under the fragmentation this workload produces, and every
-# memory number in docs/ was measured against glibc.
+# memory number in this repo was measured against glibc.
 FROM node:26.13.1-slim AS base
 ENV NODE_ENV=production
 WORKDIR /app

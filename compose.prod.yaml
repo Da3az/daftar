@@ -21,9 +21,7 @@
 #  2. It is the reproducible deployment for anyone cloning the repo, who has
 #     neither a shared PostgreSQL server nor a Cloudflare account.
 #
-# `docs/infrastructure.md` records both topologies and why the platform's
-# choices are the better ones where they apply. Do not read this file as the
-# deployment plan — it is the standalone and benchmark one.
+# Do not read this file as the deployment plan — it is the standalone and benchmark one.
 #
 # ## The caps are the point of this file
 #
@@ -32,7 +30,7 @@
 # number from an unbounded stack is a number about the host, not about the
 # deployment.
 #
-# Sized for a 4 GB / 2 vCPU box, which is the target in `docs/infrastructure.md`:
+# Sized for a 4 GB / 2 vCPU box, which is the target:
 #
 #   postgres   2048 MB  (shared_buffers 512 MB + work_mem x connections + OS cache)
 #   api         512 MB  (V8 heap capped at 384 MB — see the Dockerfile)
@@ -50,8 +48,7 @@
 #
 # No Prometheus, Alertmanager or Jaeger. On a 4 GB box the observability stack
 # from `compose.observability.yaml` needs about 1.5 GB with its own caps, which
-# does not fit alongside this. `docs/infrastructure.md` records the decision and
-# the alternative (ship metrics off-box).
+# does not fit alongside this. The alternative is to ship metrics off-box.
 
 name: daftar-prod
 
@@ -79,7 +76,7 @@ services:
     command:
       - postgres
       # Tuned for 4 GB, and deliberately more conservative than compose.yaml's
-      # dev settings. The reasoning for each is in docs/infrastructure.md.
+      # dev settings.
       - -c
       - shared_buffers=512MB
       - -c
@@ -107,8 +104,8 @@ services:
       - deadlock_timeout=1s
       # WAL archiving, which is what makes point-in-time recovery possible.
       # `archive_command` is a plain `cp` to a mounted volume here; the real
-      # off-box shipping is a separate concern — see docs/infrastructure.md and
-      # the restore exercise in docs/evidence/09-wal-restore.md.
+      # off-box shipping is a separate concern, and the restore exercise is
+      # scripts/wal-restore-drill.sh.
       - -c
       - wal_level=replica
       - -c
@@ -253,8 +250,7 @@ services:
 
   # The event log: Apache Kafka, one combined broker + KRaft controller. See
   # compose.yaml for why each setting is there; this differs only in having no
-  # host-facing listener. Default flushing (acked from the page cache) — the
-  # trade is written down in docs/infrastructure.md, "Event log durability".
+  # host-facing listener. Default flushing (acked from the page cache).
   kafka:
     image: apache/kafka:4.2.2
     hostname: kafka

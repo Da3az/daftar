@@ -24,7 +24,7 @@ export default tseslint.config(
       },
     },
     rules: {
-      // CONVENTIONS.md: one canonical log line per request, emitted by pino.
+      // One canonical log line per request, emitted by pino.
       // Nothing else writes to stdout from the server.
       'no-console': 'error',
 

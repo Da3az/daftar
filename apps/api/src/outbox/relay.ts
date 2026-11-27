@@ -102,8 +102,7 @@ export const toEnvelopeMessage = (topic: string, event: OutboxEvent) => ({
  *
  * Without this, rows released late in an outage carried a backoff of up to
  * 30 s into the recovery and drained only when it expired — measured on the
- * first outage run as 102 rows waiting ~11 s after the broker was back
- * (docs/evidence/11-event-log.md). The broker answering is the signal those
+ * first outage run as 102 rows waiting ~11 s after the broker was back. The broker answering is the signal those
  * backoffs were waiting for.
  */
 export async function wakeReleased(pool: pg.Pool): Promise<number> {

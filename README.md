@@ -17,8 +17,8 @@ request header changed. The second row has the **better** p99 and is the worse
 result.
 
 Every number in this repository was measured on a named box against an asserted
-dataset, and every one links to the file that reproduces it. The claim is not
-"this is fast" — it is **"this does not lose money, and here is the cost of
+dataset, and the load scripts that produced them are in [`load/`](load/). The
+claim is not "this is fast" — it is **"this does not lose money, and here is the cost of
 that."**
 
 ---
@@ -44,8 +44,6 @@ is exact and only the guard is missing. `naive_lost_update` computes the new
 balance in JavaScript from a value that is already stale. One lets you go
 negative; the other invents money.
 
-→ [`docs/evidence/01-naive-break.md`](docs/evidence/01-naive-break.md)
-
 ```bash
 docker compose up -d db && npm run db:migrate
 npm test --workspace @daftar/api         # the race is deterministic, via a barrier
@@ -67,8 +65,6 @@ requests is a measurement of survivors.
 
 `advisory` ships as the default.
 
-→ [`docs/evidence/03-concurrency-tradeoff.md`](docs/evidence/03-concurrency-tradeoff.md)
-
 ### 3. The prediction I published and then disproved
 
 **Predicted:** spreading load across 1,000 accounts instead of 1 would be the
@@ -80,8 +76,6 @@ row — 2.5 M entries on each house account against 17 k on the busiest customer
 No amount of customer spread touches a row that every transaction touches.
 
 Sharding the house accounts 16 ways restored **7–8.7× scaling**.
-
-The prediction is still in the file, above the result.
 
 ### 4. The load test found a different bottleneck than I predicted, again
 
@@ -107,8 +101,6 @@ I diagnosed from the metric that was easiest to see. `pool_waiting` peaked at
 was doing while 780 requests waited. One `docker stats` would have shown 101%
 CPU before any of the pool experiments. **"First resource to saturate" and "the
 bottleneck" are different things.**
-
-→ [`docs/scaling.md`](docs/scaling.md) scores every prediction, including that one.
 
 ---
 
@@ -163,8 +155,6 @@ attacker-controlled. Verifying against a re-serialised body cannot work: a JSON
 round trip changes number formatting, whitespace, unicode escaping, duplicate
 keys and integer-like key order, and corrupts large integers outright.
 
-→ [`docs/evidence/04-idempotency.md`](docs/evidence/04-idempotency.md)
-
 ---
 
 ## One query, indexed: 38× faster
@@ -176,17 +166,17 @@ The account statement with a running balance, against 12.8 M rows:
 | execution (warm) | **161.451 ms**           | **4.208 ms** | **38× faster**  |
 | plan             | Parallel Seq Scan + Sort | Index Scan   | Sort eliminated |
 
-The same file records **an index that was measured and then declined**, with
-the write-amplification cost that made it not worth it. A list of indexes that
-all helped is a list of indexes nobody measured.
+The migration that adds it,
+[`0010_statement_index.sql`](apps/api/drizzle/0010_statement_index.sql), also
+records **an index that was measured and then declined**, with the
+write-amplification cost that made it not worth it. A list of indexes that all
+helped is a list of indexes nobody measured.
 
 `ORDER BY (created_at, id)`, never `created_at` alone: a four-leg order writes
 every entry with one `now()`, so ties are guaranteed, and a window function's
 frame is defined by its `ORDER BY`. Without the `id` tiebreaker two readers of
 the same statement disagree about the intermediate balances. That is a
 correctness bug, not a cosmetic one.
-
-→ [`docs/evidence/06-query-performance.md`](docs/evidence/06-query-performance.md)
 
 ---
 
@@ -202,21 +192,16 @@ The memory alert is on the **six-hour slope of RSS**, not an absolute value,
 and its runbook points at the tracing library: a library leaking a few megabytes
 an hour never crosses a sensible ceiling until it suddenly does.
 
-→ [`docs/alerting.md`](docs/alerting.md)
-
 **Recovery, executed.** A base backup plus archived WAL restored to a chosen
 instant, with the destructive transaction one second later **not** replayed.
 PostgreSQL's log is the proof. RTO 1.8 s; RPO is `archive_timeout`, which is 300
-s and not zero — the file says why.
+s and not zero.
 
-→ [`docs/evidence/09-wal-restore.md`](docs/evidence/09-wal-restore.md) ·
-[`scripts/wal-restore-drill.sh`](scripts/wal-restore-drill.sh)
+→ [`scripts/wal-restore-drill.sh`](scripts/wal-restore-drill.sh)
 
 **Infrastructure.** Two topologies documented, memory caps published before the
 load test measured against them, connection-pool arithmetic written out, and an
 explicit list of what is **not** built.
-
-→ [`docs/infrastructure.md`](docs/infrastructure.md)
 
 ---
 
@@ -297,8 +282,7 @@ The event log is **one Apache Kafka node with replication factor 1**: losing
 its disk loses the log, which can be rebuilt from PostgreSQL, and nothing else.
 It acknowledges writes from the page cache (Kafka's default), so a host crash
 can lose the last few seconds of events — feed rows, position updates and
-notifications, never money; see
-[`docs/infrastructure.md`](docs/infrastructure.md).
+notifications, never money.
 Delivery is at-least-once everywhere and every consumer is idempotent by a
 PostgreSQL unique key; **no exactly-once is claimed**, because Kafka's
 exactly-once ends at the broker and the effects here are in PostgreSQL. Missed
@@ -357,23 +341,22 @@ core. Its 26.2 line, the last under BSL 1.1, reaches end of support on
 Apache 2.0 and runs here in a 1 GB cap. It gives up one thing: Redpanda
 fsyncs before it acks, and Kafka by default acks from the page cache.
 
-The cost is two more stateful services and about 1.5 GB of memory caps (see
-[`docs/infrastructure.md`](docs/infrastructure.md)). Neither is trusted for
+The cost is two more stateful services and about 1.5 GB of memory caps. Neither is trusted for
 correctness: every guarantee is a PostgreSQL constraint, and PostgreSQL-side
 sweepers re-drive anything a lost job or message would have done.
 
-**Measured** (local dev box, not the 8 GB target; provenance in each file).
+**Measured** (local dev box, not the 8 GB target).
 These runs were made **on Redpanda v26.2.7**, before the swap to Kafka, and
 have not been repeated on Kafka:
 
-| Claim                                              | Result                                                                                                                      | File                                                           |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Broker stopped for 30 s under load                 | 284 orders filled during the outage; 993/993 events delivered, 0 lost, 0 dead-lettered; backlog cleared ≤ 1 s after restart | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
-| Positions rebuilt from offset 0                    | 2,202 messages in 11.6 s; matches the ledger except the one guest whose fills predate the outbox                            | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
-| Projection drift injected                          | 5/5 detected in ~14.5 s (full-sweep path, 2 s interval)                                                                     | [`11-event-log.md`](docs/evidence/11-event-log.md)             |
-| 60 withdrawals, rail timing out/dropping/rejecting | 54 paid once each, 6 returned, 0 holds left, funding moved by exactly what was paid                                         | [`12-withdrawal-saga.md`](docs/evidence/12-withdrawal-saga.md) |
-| Push vs 2 s polling                                | p50 667 ms vs 2,293 ms; 4,192 vs 9,600 requests/min for 50 viewers                                                          | [`13-live-push.md`](docs/evidence/13-live-push.md)             |
-| Recurring buy, 41 min                              | 41 ticks → 41 runs → 41 orders; a tick during a worker outage ran late, once                                                | [`14-recurring-buys.md`](docs/evidence/14-recurring-buys.md)   |
+| Claim                                              | Result                                                                                                                      |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Broker stopped for 30 s under load                 | 284 orders filled during the outage; 993/993 events delivered, 0 lost, 0 dead-lettered; backlog cleared ≤ 1 s after restart |
+| Positions rebuilt from offset 0                    | 2,202 messages in 11.6 s; matches the ledger except the one guest whose fills predate the outbox                            |
+| Projection drift injected                          | 5/5 detected in ~14.5 s (full-sweep path, 2 s interval)                                                                     |
+| 60 withdrawals, rail timing out/dropping/rejecting | 54 paid once each, 6 returned, 0 holds left, funding moved by exactly what was paid                                         |
+| Push vs 2 s polling                                | p50 667 ms vs 2,293 ms; 4,192 vs 9,600 requests/min for 50 viewers                                                          |
+| Recurring buy, 41 min                              | 41 ticks → 41 runs → 41 orders; a tick during a worker outage ran late, once                                                |
 
 Three of those runs found bugs, fixed before the numbers above were taken: the
 outbox backlog waited out its outage backoff after the broker was back; a
@@ -520,7 +503,7 @@ load at the time and never revisited.
   benchmark runs and would have been avoided by one `docker stats`.
 - **Make the shard count configurable from the start.** `HOUSE_SHARDS = 16` is
   a hardcoded constant, so the fix for the current bottleneck needs a migration.
-  It should have been a tunable with the number recorded in each evidence file.
+  It should have been a tunable with the number recorded with each run.
 - **Build the chaos burst endpoint earlier.** It is the fastest way to reproduce
   a concurrency bug by hand, and it existed only after most of them were already
   found the slow way.
@@ -533,7 +516,6 @@ load at the time and never revisited.
 
 ---
 
-MIT. See [`CONVENTIONS.md`](CONVENTIONS.md) for the rules this codebase holds
-itself to, and [`NOTICE`](NOTICE) for third-party attribution.
+MIT. See [`NOTICE`](NOTICE) for third-party attribution.
 
 **This is a demo. No real funds, no real trading, no real bank.**

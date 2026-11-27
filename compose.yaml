@@ -3,7 +3,7 @@
 # postgres:18-alpine, not PGlite. PGlite compiles PostgreSQL to WASM and runs it
 # single-user, holding an exclusive mutex per transaction, so two transactions are
 # never in flight at once — it silently passes the exact check-then-write bugs this
-# repo exists to demonstrate. See CONVENTIONS.md.
+# repo exists to demonstrate.
 
 name: daftar
 
@@ -77,7 +77,7 @@ services:
   # Apache Kafka (Apache 2.0), one node acting as both broker and KRaft
   # controller. 4.2.x because 4.2 is the newest Kafka the client
   # (@platformatic/kafka) runs its CI against — Confluent Platform 8.2, which
-  # ships Apache Kafka 4.2. Redpanda before it: see docs/infrastructure.md.
+  # ships Apache Kafka 4.2. Redpanda before it.
   #
   # The image builds server.properties from KAFKA_* variables (`.` → `_`), and
   # when any are set it does NOT start from its bundled defaults — so every
@@ -87,8 +87,7 @@ services:
   #
   # Durability: Kafka's default flushing, deliberately. A write is acked once
   # it is in the page cache; a broker *process* crash loses nothing, a *host*
-  # crash or power cut can lose the last few seconds of acked events. See
-  # docs/infrastructure.md, "Event log durability".
+  # crash or power cut can lose the last few seconds of acked events.
   kafka:
     image: apache/kafka:4.2.2
     container_name: daftar-kafka

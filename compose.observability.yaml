@@ -33,7 +33,7 @@
 # **A timeout here is not the same as "the API is down", and the TargetDown
 # alert cannot tell them apart.** It did fire for this, correctly, for a reason
 # that had nothing to do with the API — which is the honest shape of that
-# alert and is written up in docs/alerting.md.
+# alert.
 #
 # Once the API is containerised (Phase 9) this goes away: both end up on one
 # compose network and the target becomes a service name.

@@ -5,8 +5,7 @@
  * Slack and PagerDuty both need an account and a credential this project does
  * not have, and "here is the Slack config I would have used" is not evidence
  * that anything fires. This closes the loop locally: rule -> Prometheus ->
- * Alertmanager -> grouped -> delivered -> printed, with the printed line
- * captured in docs/alerting.md.
+ * Alertmanager -> grouped -> delivered -> printed.
  *
  * Zero dependencies and no build step: it is mounted read-only into a stock
  * node image. A service whose only job is to log must not have a supply chain.
